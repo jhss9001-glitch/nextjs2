@@ -1,15 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LANG_NAME, LOCALE } from '@/lib/plain-text';
-import type { OutLang } from '@/lib/types';
 
-export interface SpeechPart {
-  lang: OutLang;
-  text: string;
-}
-
-/** 음성 읽기: [{ lang, text }] 순서대로 재생 */
+/** 음성 읽기: 영어 문장들을 순서대로 재생 */
 export function useSpeech(toast: (msg: string) => void) {
   const [speaking, setSpeaking] = useState(false);
   const token = useRef(0);
@@ -29,7 +22,7 @@ export function useSpeech(toast: (msg: string) => void) {
   }, []);
 
   const speakQueue = useCallback(
-    (parts: SpeechPart[]) => {
+    (texts: string[]) => {
       if (!('speechSynthesis' in window)) {
         toast('이 브라우저는 음성 읽기를 지원하지 않습니다.');
         return;
@@ -38,13 +31,13 @@ export function useSpeech(toast: (msg: string) => void) {
       synth.cancel();
       const id = ++token.current;
       const voices = synth.getVoices();
-      parts.forEach((p, idx) => {
-        const u = new SpeechSynthesisUtterance(p.text);
-        u.lang = LOCALE[p.lang];
-        const v = voices.find((x) => x.lang.replace('_', '-').toLowerCase().startsWith(p.lang));
-        if (v) u.voice = v;
+      const voice = voices.find((x) => x.lang.replace('_', '-').toLowerCase().startsWith('en'));
+      texts.forEach((text, idx) => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US';
+        if (voice) u.voice = voice;
         u.rate = 0.9;
-        if (idx === parts.length - 1) {
+        if (idx === texts.length - 1) {
           u.onend = u.onerror = () => {
             if (token.current === id) setSpeaking(false);
           };
@@ -52,11 +45,7 @@ export function useSpeech(toast: (msg: string) => void) {
         synth.speak(u);
       });
       setSpeaking(true);
-      const langs = [...new Set(parts.map((p) => p.lang))];
-      const missing = langs.filter((l) => !voices.some((x) => x.lang.toLowerCase().startsWith(l)));
-      if (voices.length && missing.length) {
-        toast(`${missing.map((l) => LANG_NAME[l]).join(', ')} 음성이 설치되어 있지 않을 수 있습니다.`);
-      }
+      if (voices.length && !voice) toast('English 음성이 설치되어 있지 않을 수 있습니다.');
     },
     [toast]
   );

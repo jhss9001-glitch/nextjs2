@@ -10,8 +10,8 @@ export default function AppHeader({
       <div className="brand">
         <span className="logo" aria-hidden="true">Rx</span>
         <div>
-          <h1>다국어 복약지도 가이드</h1>
-          <p>English · 中文 · 日本語</p>
+          <h1>영문 복약지도 가이드</h1>
+          <p>English · 식약처 의약품 정보 검색</p>
         </div>
       </div>
       <label className="pharmacy-field">

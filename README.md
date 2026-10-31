@@ -4,6 +4,14 @@
 
 ## 실행
 
+식약처 검색을 쓰려면 프로젝트 루트에 `.env.local`을 만들고 공공데이터포털 인증키를 넣습니다(깃에는 올라가지 않음).
+
+```
+MFDS_API_KEY=공공데이터포털_일반인증키
+```
+
+사용 API: e약은요(`DrbEasyDrugInfoService/getDrbEasyDrugList`), 의약품 제품 허가정보(`DrugPrdtPrmsnInfoService08`). 브라우저는 `/api/drugs/search?q=`만 호출하고, 키는 서버에만 있습니다.
+
 ```bash
 npm install
 npm run dev     # http://localhost:3000

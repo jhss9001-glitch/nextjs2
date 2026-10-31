@@ -1,8 +1,9 @@
 import type { Drug, DrugDefaults, FormState, GeneralKey, Item, Route } from '@/lib/types';
 
-/** 원본 applyDefaults + updateVisibility(점안은 단위 '방울' 고정)의 값 계산 부분 */
+/** 기본값 적용 (점안은 단위 '방울' 고정) */
 export function makeForm(def: DrugDefaults, general: GeneralKey[], route: Route): FormState {
   return {
+    route,
     unit: route === 'eye' ? 'drop' : def.unit || 'tab',
     qty: String(def.qty || 1),
     freq: def.freq || '3',
@@ -10,31 +11,20 @@ export function makeForm(def: DrugDefaults, general: GeneralKey[], route: Route)
     days: def.days != null ? String(def.days) : '',
     interval: def.interval != null ? String(def.interval) : '',
     maxDaily: def.max != null ? String(def.max) : '',
-    general
+    general,
+    notes: []
   };
 }
 
 export const defaultForm = (route: Route): FormState =>
   makeForm({ unit: 'tab', qty: 1, freq: '3', timing: 'after_30', days: '', interval: 4, max: '' }, [], route);
 
-export function currentRoute(drug: Drug | null, custom: boolean, customRoute: Route): Route {
-  if (drug) return drug.route;
-  if (custom) return customRoute;
-  return 'oral';
-}
-
-/** 원본 readForm() */
-export function buildItem(
-  drug: Drug | null,
-  custom: boolean,
-  customName: string,
-  customRoute: Route,
-  form: FormState
-): Item {
-  const route = currentRoute(drug, custom, customRoute);
+/** 현재 입력값 → 항목 */
+export function buildItem(drug: Drug | null, custom: boolean, customName: string, form: FormState): Item {
+  const route = form.route;
   const qty = Math.max(0.5, Number(form.qty) || 1);
   return {
-    drugId: drug ? drug.id : null,
+    drug,
     customName: custom ? customName.trim() : '',
     route,
     qty,
@@ -44,6 +34,23 @@ export function buildItem(
     days: form.days ? Number(form.days) : null,
     interval: form.interval ? Number(form.interval) : null,
     max: form.maxDaily ? Number(form.maxDaily) : null,
-    general: form.general
+    general: form.general,
+    notes: form.notes
+  };
+}
+
+/** 목록 항목 → 폼 (수정 시작) */
+export function itemToForm(it: Item): FormState {
+  return {
+    route: it.route,
+    unit: it.route === 'eye' ? 'drop' : it.unit,
+    qty: String(it.qty || 1),
+    freq: it.freq,
+    timing: it.timing,
+    days: String(it.days ?? ''),
+    interval: String(it.interval ?? ''),
+    maxDaily: String(it.max ?? ''),
+    general: it.general,
+    notes: it.notes
   };
 }

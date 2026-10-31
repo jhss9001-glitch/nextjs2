@@ -1,11 +1,8 @@
 import { UI } from '@/data/rx-data';
-import { findDrug } from '@/lib/search';
-import { cautions, directions } from '@/lib/sentences';
+import { cautions, directions, itemName } from '@/lib/sentences';
 import type { Item, Lang } from '@/lib/types';
 
-const LOCALE: Record<Lang, string> = { ko: 'ko-KR', en: 'en-US', zh: 'zh-CN', ja: 'ja-JP' };
-export const LANG_NAME = { en: 'English', zh: '中文', ja: '日本語' } as const;
-export { LOCALE };
+export const LOCALE: Record<Lang, string> = { ko: 'ko-KR', en: 'en-US' };
 
 export function today(lang: Lang): string {
   return new Date().toLocaleDateString(LOCALE[lang], { year: 'numeric', month: 'long', day: 'numeric' });
@@ -17,10 +14,10 @@ export function plainText(list: Item[], lang: Lang, withKo: boolean, pharmacy: s
   lines.push(`[${UI.title[lang]}]`);
   lines.push(`${pharmacy ? `${UI.pharmacy[lang]}: ${pharmacy} / ` : ''}${today(lang)}`);
   list.forEach((it, i) => {
-    const d = findDrug(it.drugId);
+    const d = it.drug;
     lines.push('');
-    lines.push(`${i + 1}. ${d ? d.ing[lang] : it.customName}${d ? ` (${d.brandEn})` : ''}`);
-    if (d) lines.push(`- ${UI.purpose[lang]}: ${d.use[lang]}`);
+    lines.push(`${i + 1}. ${itemName(it, lang)}${d?.brandEn ? ` (${d.brandEn})` : ''}`);
+    if (d?.use[lang]) lines.push(`- ${UI.purpose[lang]}: ${d.use[lang]}`);
     lines.push(`- ${UI.howto[lang]}: ${directions(it, lang).join(' ')}`);
     if (withKo) lines.push(`  (${directions(it, 'ko').join(' ')})`);
     const cs = cautions(it, lang);

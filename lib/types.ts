@@ -1,6 +1,4 @@
-export type Lang = 'ko' | 'en' | 'zh' | 'ja';
-export type OutLang = 'en' | 'zh' | 'ja';
-export type TabLang = OutLang | 'all';
+export type Lang = 'ko' | 'en';
 export type Route = 'oral' | 'eye' | 'topical';
 
 export type UnitKey = 'tab' | 'cap' | 'pkt' | 'ml' | 'drop';
@@ -18,8 +16,6 @@ export interface Unit {
   label: string;
   ko: string;
   en: [string, string];
-  zh: string;
-  ja: string;
   half?: Tr;
 }
 
@@ -28,8 +24,6 @@ export interface Timing {
   ko: string;
   en: string;
   en1?: string;
-  zh: string;
-  ja: string;
 }
 
 export interface DrugDefaults {
@@ -42,6 +36,22 @@ export interface DrugDefaults {
   max?: number | string | null;
 }
 
+/** 식약처(e약은요·허가정보)에서 가져온 원문. 약사 참고용이며 영어 안내문에는 넣지 않음 */
+export interface MfdsInfo {
+  itemSeq: string;
+  entpName: string;
+  etcOtc?: string; // 전문/일반
+  ingredient?: string; // 주성분
+  efcy?: string; // 효능
+  useMethod?: string; // 사용법
+  atpnWarn?: string; // 사용 전 경고
+  atpn?: string; // 주의사항
+  intrc?: string; // 상호작용
+  se?: string; // 부작용
+  deposit?: string; // 보관법
+  image?: string;
+}
+
 export interface Drug {
   id: string;
   brand: string;
@@ -49,16 +59,17 @@ export interface Drug {
   aliases?: string[];
   cat: string;
   route: Route;
-  ing: Tr;
-  use: Tr;
+  ing: Tr; // en은 영어 안내문에 표시되는 약 이름
+  use: Tr; // en이 비어 있으면 영어 안내문에서 효능을 생략
   warn: Tr[];
   def: DrugDefaults;
   general?: GeneralKey[];
+  mfds?: MfdsInfo;
 }
 
-/** 조제 목록의 한 항목 (원본 readForm()의 반환 형태) */
+/** 조제 목록의 한 항목 */
 export interface Item {
-  drugId: string | null;
+  drug: Drug | null; // 선택 당시의 약 정보 (식약처 약도 목록에 그대로 보관)
   customName: string;
   route: Route;
   qty: number;
@@ -69,10 +80,12 @@ export interface Item {
   interval: number | null;
   max: number | null;
   general: GeneralKey[];
+  notes: Tr[]; // 직접 입력한 주의사항 (en 필수, ko 선택)
 }
 
-/** 폼 입력값 (select/input의 문자열 값 그대로) */
+/** 폼 입력값 */
 export interface FormState {
+  route: Route;
   qty: string;
   unit: UnitKey;
   freq: string;
@@ -81,6 +94,7 @@ export interface FormState {
   interval: string;
   maxDaily: string;
   general: GeneralKey[];
+  notes: Tr[];
 }
 
 export interface ScriptBlock {

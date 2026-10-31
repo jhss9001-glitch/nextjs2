@@ -8,24 +8,19 @@ import OutputPanel from '@/components/OutputPanel';
 import Toast from '@/components/Toast';
 import { useSpeech } from '@/hooks/useSpeech';
 import { useToast } from '@/hooks/useToast';
-import { buildItem, currentRoute, defaultForm, makeForm } from '@/lib/form';
+import { buildItem, defaultForm, itemToForm, makeForm } from '@/lib/form';
 import { plainText } from '@/lib/plain-text';
-import { findDrug } from '@/lib/search';
 import { buildScript } from '@/lib/spoken';
 import { store } from '@/lib/storage';
-import type { FormState, Item, OutLang, Route, TabLang } from '@/lib/types';
-
-const LANGS: OutLang[] = ['en', 'zh', 'ja'];
+import type { Drug, FormState, Item, Route } from '@/lib/types';
 
 export default function RxApp() {
-  const [drug, setDrug] = useState<ReturnType<typeof findDrug>>(null);
+  const [drug, setDrug] = useState<Drug | null>(null);
   const [custom, setCustom] = useState(false);
   const [customName, setCustomName] = useState('');
-  const [customRoute, setCustomRoute] = useState<Route>('oral');
   const [form, setForm] = useState<FormState>(() => defaultForm('oral'));
   const [list, setList] = useState<Item[]>([]);
   const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [lang, setLang] = useState<TabLang>('en');
   const [showKo, setShowKo] = useState(true);
   const [pharmacy, setPharmacy] = useState('');
   const [framed, setFramed] = useState(false);
@@ -41,7 +36,6 @@ export default function RxApp() {
   // 저장된 설정 불러오기 + 프레임 안 여부 확인 (브라우저 전용 값이라 마운트 후 반영)
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    setLang(store.get<TabLang>('rx.lang', 'en'));
     setShowKo(store.get('rx.showKo', true));
     setPharmacy(store.get('rx.pharmacy', ''));
     // 공유 링크(다른 페이지 안에 삽입된 상태)에서는 인쇄 창을 열 수 없으므로 인쇄 버튼을 숨김
@@ -52,18 +46,16 @@ export default function RxApp() {
     return () => clearTimeout(clearTimer.current);
   }, []);
 
-  const route = currentRoute(drug, custom, customRoute);
-  const preview = buildItem(drug, custom, customName, customRoute, form);
+  const preview = buildItem(drug, custom, customName, form);
 
   /* ---------------- 폼 ---------------- */
   const patchForm = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
-  const resetForm = (r: Route) => setForm(defaultForm(r));
+  // 사용 경로: 약 선택 시 자동, 이후 사용자가 변경 가능 (점안은 단위 '방울' 고정)
+  const changeRoute = (r: Route) => patchForm(r === 'eye' ? { route: r, unit: 'drop' } : { route: r });
 
   /* ---------------- 약 선택 ---------------- */
-  const selectDrug = (id: string) => {
-    const d = findDrug(id);
-    if (!d) return;
+  const selectDrug = (d: Drug) => {
     setDrug(d);
     setCustom(false);
     setForm(makeForm(d.def, d.general || [], d.route));
@@ -71,32 +63,27 @@ export default function RxApp() {
 
   const clearDrug = () => {
     setDrug(null);
-    resetForm(custom ? customRoute : 'oral');
+    setForm(defaultForm('oral'));
   };
+
+  const changeEnName = (en: string) => setDrug((d) => (d ? { ...d, ing: { ...d.ing, en } } : d));
 
   const toggleCustom = () => {
     const next = !custom;
     setCustom(next);
     if (next) {
       setDrug(null);
-      resetForm(customRoute);
+      setForm(defaultForm('oral'));
       setTimeout(() => customNameRef.current?.focus(), 0);
     }
   };
-
-  const changeCustomRoute = (r: Route) => {
-    setCustomRoute(r);
-    if (r === 'eye') patchForm({ unit: 'drop' });
-  };
-
-  const changeForm = (patch: Partial<FormState>) => patchForm(patch);
 
   /* ---------------- 조제 목록 ---------------- */
   const clearSelection = () => {
     setDrug(null);
     setCustom(false);
     setCustomName('');
-    resetForm('oral');
+    setForm(defaultForm('oral'));
   };
 
   const endEdit = () => setEditIndex(null);
@@ -105,7 +92,7 @@ export default function RxApp() {
     if (!drug && !custom) { toast('먼저 약을 선택하세요.'); searchRef.current?.focus(); return; }
     if (custom && !customName.trim()) { toast('약 이름을 입력하세요.'); customNameRef.current?.focus(); return; }
 
-    const it = buildItem(drug, custom, customName, customRoute, form);
+    const it = buildItem(drug, custom, customName, form);
     if (editIndex !== null) {
       setList((l) => l.map((x, i) => (i === editIndex ? it : x)));
       toast('수정되었습니다.');
@@ -120,25 +107,10 @@ export default function RxApp() {
   const startEdit = (i: number) => {
     const it = list[i];
     setEditIndex(i);
-    if (it.drugId) {
-      setDrug(findDrug(it.drugId));
-      setCustom(false);
-    } else {
-      setDrug(null);
-      setCustom(true);
-      setCustomName(it.customName);
-      setCustomRoute(it.route);
-    }
-    setForm({
-      unit: it.route === 'eye' ? 'drop' : it.unit,
-      qty: String(it.qty || 1),
-      freq: it.freq,
-      timing: it.timing,
-      days: String(it.days ?? ''),
-      interval: String(it.interval ?? ''),
-      maxDaily: String(it.max ?? ''),
-      general: it.general
-    });
+    setDrug(it.drug);
+    setCustom(!it.drug);
+    setCustomName(it.drug ? '' : it.customName);
+    setForm(itemToForm(it));
     searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -174,12 +146,6 @@ export default function RxApp() {
   };
 
   /* ---------------- 출력 ---------------- */
-  const changeLang = (l: TabLang) => {
-    setLang(l);
-    store.set('rx.lang', l);
-    stop();
-  };
-
   const changeShowKo = (v: boolean) => {
     setShowKo(v);
     store.set('rx.showKo', v);
@@ -190,21 +156,16 @@ export default function RxApp() {
     store.set('rx.pharmacy', v);
   };
 
-  const outLangs = (): OutLang[] => (lang === 'all' ? LANGS : [lang]);
-
-  // [전체 읽어주기]: 선택한 언어의 스크립트 전체를 읽음
+  // [전체 읽어주기]: 스크립트 전체를 읽음
   const speak = () => {
     if (!list.length) { toast('먼저 약을 목록에 추가하세요.'); return; }
     if ('speechSynthesis' in window && speechSynthesis.speaking) { stop(); return; }
-    const parts = outLangs().flatMap((l) =>
-      buildScript(list, l).flatMap((b) => b.lines.map((text) => ({ lang: l, text })))
-    );
-    speakQueue(parts);
+    speakQueue(buildScript(list, 'en').flatMap((b) => b.lines));
   };
 
   const copyText = async () => {
     if (!list.length) { toast('먼저 약을 목록에 추가하세요.'); return; }
-    const text = outLangs().map((l) => plainText(list, l, showKo, pharmacy.trim())).join('\n\n--------------------\n\n');
+    const text = plainText(list, 'en', showKo, pharmacy.trim());
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -229,8 +190,6 @@ export default function RxApp() {
           drug={drug}
           custom={custom}
           customName={customName}
-          customRoute={customRoute}
-          route={route}
           form={form}
           preview={preview}
           list={list}
@@ -240,10 +199,11 @@ export default function RxApp() {
           customNameRef={customNameRef}
           onSelectDrug={selectDrug}
           onClearDrug={clearDrug}
+          onEnName={changeEnName}
           onToggleCustom={toggleCustom}
           onCustomName={setCustomName}
-          onCustomRoute={changeCustomRoute}
-          onForm={changeForm}
+          onRoute={changeRoute}
+          onForm={patchForm}
           onAdd={addItem}
           onCancelEdit={cancelEdit}
           onUp={moveUp}
@@ -253,17 +213,15 @@ export default function RxApp() {
         />
         <OutputPanel
           list={list}
-          lang={lang}
           showKo={showKo}
           pharmacy={pharmacy.trim()}
           speaking={speaking}
           framed={framed}
-          onLang={changeLang}
           onShowKo={changeShowKo}
           onSpeak={speak}
           onCopy={copyText}
           onPrint={print}
-          onPlay={(l, text) => speakQueue([{ lang: l, text }])}
+          onPlay={(text) => speakQueue([text])}
         />
       </main>
       <AppFooter />

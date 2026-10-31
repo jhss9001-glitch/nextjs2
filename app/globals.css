@@ -52,6 +52,19 @@
   color-scheme: dark;
 }
 
+/* Mantine 색상 변수를 이 앱의 팔레트(라이트/다크 자동 전환)에 연결 */
+:root[data-mantine-color-scheme] {
+  --mantine-color-body: var(--surface);
+  --mantine-color-text: var(--text);
+  --mantine-color-dimmed: var(--muted);
+  --mantine-color-placeholder: var(--muted);
+  --mantine-color-default: var(--surface);
+  --mantine-color-default-hover: var(--surface-2);
+  --mantine-color-default-border: var(--border);
+  --mantine-primary-color-light: var(--primary-soft);
+  --mantine-primary-color-light-color: var(--primary);
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -128,7 +141,9 @@ button, input, select { font: inherit; color: inherit; }
   font-size: .78rem;
 }
 
-input[type="text"], input[type="search"], input[type="number"], select {
+/* Mantine 입력 요소(.mantine-Input-input)는 Mantine 스타일을 그대로 사용 */
+input[type="text"]:not(.mantine-Input-input), input[type="search"]:not(.mantine-Input-input),
+input[type="number"]:not(.mantine-Input-input), select {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--border);
@@ -137,7 +152,7 @@ input[type="text"], input[type="search"], input[type="number"], select {
   outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
-input:focus, select:focus {
+input:not(.mantine-Input-input):focus, select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
@@ -446,6 +461,31 @@ button { cursor: pointer; }
   z-index: 100;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------------- Mantine 적용 부분 ---------------- */
+.span-2 { grid-column: 1 / -1; }
+.qty-field { grid-column: 1 / -1; display: grid; grid-template-columns: 3fr 2fr; gap: 8px; }
+.drug-option { padding: 8px 10px; }
+.search-error { color: var(--danger); }
+.out-title { margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+
+.sd-en { margin-top: 10px; }
+.sd-mfds { margin-top: 10px; }
+.sd-note { margin: 0 0 8px; font-size: .8rem; color: var(--muted); }
+.sd-text { white-space: pre-line; font-size: .85rem; line-height: 1.6; }
+
+.notes { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.notes-title { font-size: .85rem; font-weight: 700; color: var(--primary); }
+.notes-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.notes-list li {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--warm-border);
+  border-radius: 8px;
+  background: var(--warm-soft);
+  font-size: .88rem;
+}
+.notes-list small { display: block; color: var(--muted); font-size: .8rem; }
 
 /* ---------------- 반응형 ---------------- */
 @media (max-width: 900px) {
