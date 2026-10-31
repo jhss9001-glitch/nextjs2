@@ -1,6 +1,5 @@
-import { TIMINGS } from '@/data/rx-data';
-import { cautions, fmtNum, freqText, itemName, itemTitle, qtyText, timingText } from '@/lib/sentences';
-import type { Item, Lang, ScriptBlock, TimingKey, UnitKey } from '@/lib/types';
+import { cautions, fmtNum, freqOf, infoOf, itemName, itemTitle, qtyOf, routePhrase, routeVerbKo, timingOf, tx } from '@/lib/sentences';
+import type { Item, Lang, ScriptBlock } from '@/lib/types';
 
 /* 구어체 복약지도 스크립트 */
 const KO_NATIVE = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
@@ -10,18 +9,23 @@ const ORD = {
 };
 const lcFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
-// 한국어 구어: "한 알", "두 포", "반 알"
-function koSpokenQty(q: number, unitKey: UnitKey): string {
-  if (unitKey === 'ml') return `${fmtNum(q)}mL`;
-  const word = { tab: '알', cap: '캡슐', pkt: '포', drop: '방울' }[unitKey];
+// 한국어 구어: "한 알", "두 포", "반 알" (직접 입력한 단위는 숫자 그대로)
+function koSpokenQty(it: Item): string {
+  const q = it.qty;
+  if (it.unit === 'custom') return `${fmtNum(q)}${tx(it.texts.unit, 'ko')}`;
+  if (it.unit === 'ml') return `${fmtNum(q)}mL`;
+  const word = { tab: '알', cap: '캡슐', pkt: '포', drop: '방울' }[it.unit];
   if (q === 0.5) return `반 ${word}`;
   if (Number.isInteger(q) && q <= 10) return `${KO_NATIVE[q]} ${word}`;
   return `${fmtNum(q)}${word}`;
 }
 
-function spokenFreq(n: number, lang: Lang): string {
-  if (lang === 'ko') return `하루 ${KO_NATIVE[n] || n} 번`;
-  return freqText(n, 'en');
+function spokenFreq(it: Item, lang: Lang): string {
+  if (lang === 'en' || it.freq === 'custom') return freqOf(it, lang);
+  const n = Number(it.freq);
+  if (it.cycle === 'weekly') return '일주일에 한 번';
+  if (it.cycle === 'alt') return n === 1 ? '이틀에 한 번' : `이틀에 한 번, 하루 ${KO_NATIVE[n] || n} 번`;
+  return `하루 ${KO_NATIVE[n] || n} 번`;
 }
 
 type Fn<A extends unknown[]> = Record<Lang, (...a: A) => string>;
@@ -39,14 +43,19 @@ const SP = {
     ko: (i, n, name) => (n === 1 ? `이 약은 ${name}입니다.` : `${ORD.ko[i] || i + 1} 번째 약은 ${name}입니다.`),
     en: (i, n, name) => (n === 1 ? `This medicine is ${name}.` : `The ${ORD.en[i] || `number ${i + 1}`} medicine is ${name}.`)
   } as Fn<[number, number, string]>,
-  purpose: {
-    ko: (u) => `${u}에 쓰는 약이에요.`,
-    en: (u) => `It's for ${lcFirst(u)}.`
-  } as Fn<[string]>,
   oral: {
-    ko: (f, q, tk) => `${f}, 한 번에 ${q}씩 ${TIMINGS[tk].ko} 드세요.`,
-    en: (f, q, tk, n) => `Please take ${q} ${f}, ${timingText(tk, n, 'en')}.`
-  } as Fn<[string, string, TimingKey, number]>,
+    ko: (f, q, t) => `${f}, 한 번에 ${q}씩 ${t} 드세요.`,
+    en: (f, q, t) => `Please take ${q} ${f}, ${t}.`
+  } as Fn<[string, string, string]>,
+  // 직접 입력한 사용 경로: ko는 v = "흡입하세요", en은 v = 용량이 들어간 동사구 ("Inhale 2 puffs")
+  custom: {
+    ko: (v, f, q, t) => `${f}, 한 번에 ${q}씩 ${t} ${v}`.replace(/([^.!?。])$/, '$1.'),
+    en: (v, f, _q, t) => `Please ${lcFirst(v)} ${f}, ${t}.`
+  } as Fn<[string, string, string, string]>,
+  customPrn: {
+    ko: (v, q) => `필요할 때만 한 번에 ${q}씩 ${v}`.replace(/([^.!?。])$/, '$1.'),
+    en: (v) => `Please ${lcFirst(v)} only when you need to.`
+  } as Fn<[string, string]>,
   oralPrn: {
     ko: (q) => `증상이 있을 때만 한 번에 ${q}씩 드세요.`,
     en: (q) => `Please take ${q} only when you have symptoms.`
@@ -83,6 +92,10 @@ const SP = {
     ko: (d) => `${d}일 동안 사용하세요.`,
     en: (d) => `Please use it for ${d} ${d > 1 ? 'days' : 'day'}.`
   } as Fn<[number]>,
+  sideIntro: {
+    ko: '이 약을 드시면 이런 부작용이 생길 수 있어요.',
+    en: 'This medicine may cause some side effects.'
+  } as Record<Lang, string>,
   cautionIntro: {
     ko: '그리고 주의하실 점이 있어요.',
     en: 'Also, please keep these points in mind.'
@@ -96,24 +109,34 @@ const SP = {
 function spokenDirections(it: Item, lang: Lang): string[] {
   const out: string[] = [];
   const prn = it.freq === 'prn';
-  const n = prn ? 0 : Number(it.freq);
-  const q = lang === 'ko' ? koSpokenQty(it.qty, it.unit) : qtyText(it.qty, it.unit, lang);
-  const f = prn ? '' : spokenFreq(n, lang);
+  const q = lang === 'ko' ? koSpokenQty(it) : qtyOf(it, lang);
+  const f = prn ? '' : spokenFreq(it, lang);
+  const takeLike = it.route === 'oral' || it.route === 'custom';
 
   if (it.route === 'oral') {
     if (prn) {
       out.push(SP.oralPrn[lang](q));
       if (it.interval) out.push(SP.interval[lang](it.interval));
     } else {
-      out.push(SP.oral[lang](f, q, it.timing, n));
+      out.push(SP.oral[lang](f, q, timingOf(it, lang)));
     }
   } else if (it.route === 'eye') {
     out.push(prn ? SP.eyePrn[lang](q) : SP.eye[lang](f, q));
-  } else {
+  } else if (it.route === 'topical') {
     out.push(prn ? SP.topicalPrn[lang]() : SP.topical[lang](f));
+  } else {
+    const v = lang === 'en' ? routePhrase(it, q) : routeVerbKo(it);
+    if (prn) {
+      out.push(SP.customPrn[lang](v, q));
+      if (it.interval) out.push(SP.interval[lang](it.interval));
+    } else {
+      out.push(SP.custom[lang](v, f, q, timingOf(it, lang)));
+    }
   }
+  // 직접 입력한 투여 주기 문장은 그대로 읽어 줌 (한국어가 비어 있으면 빈 줄로 맞춤)
+  if (!prn && it.cycle === 'custom') out.push(it.texts.cycle[lang]);
   if (prn && it.max) out.push(SP.max[lang](it.max, it.route === 'oral'));
-  if (it.days) out.push(it.route === 'oral' ? SP.supply[lang](it.days) : SP.useFor[lang](it.days));
+  if (it.days) out.push(takeLike ? SP.supply[lang](it.days) : SP.useFor[lang](it.days));
   return out;
 }
 
@@ -129,10 +152,17 @@ export function buildScript(list: Item[], lang: Lang): ScriptBlock[] {
   blocks.push({ label: '시작 인사', lines: opening });
 
   list.forEach((it, i) => {
-    const d = it.drug;
-    const lines = [SP.intro[lang](i, total, itemName(it, lang))];
-    if (d && d.use.en) lines.push(SP.purpose[lang](d.use[lang]));
+    const info = infoOf(it);
+    // 순서: 약 이름 → 무슨 약 → 복용법 → 부작용(→ 바로 병원에) → 주의사항
+    // "Amoxapen Cap." 처럼 마침표로 끝나는 이름은 문장 끝 마침표와 겹치지 않게
+    const lines = [SP.intro[lang](i, total, itemName(it, lang)).replace(/\.\.$/, '.')];
+    if (info.purpose) lines.push(info.purpose[lang]);
     lines.push(...spokenDirections(it, lang));
+    if (info.sideEffects.length || info.serious) {
+      lines.push(SP.sideIntro[lang]);
+      info.sideEffects.forEach((s) => lines.push(s[lang]));
+      if (info.serious) lines.push(info.serious[lang]);
+    }
     const cs = cautions(it, lang);
     if (cs.length) {
       lines.push(SP.cautionIntro[lang]);

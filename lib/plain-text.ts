@@ -1,5 +1,5 @@
 import { UI } from '@/data/rx-data';
-import { cautions, directions, itemName } from '@/lib/sentences';
+import { cautions, directions, infoOf, itemName, joinDir } from '@/lib/sentences';
 import type { Item, Lang } from '@/lib/types';
 
 export const LOCALE: Record<Lang, string> = { ko: 'ko-KR', en: 'en-US' };
@@ -15,11 +15,20 @@ export function plainText(list: Item[], lang: Lang, withKo: boolean, pharmacy: s
   lines.push(`${pharmacy ? `${UI.pharmacy[lang]}: ${pharmacy} / ` : ''}${today(lang)}`);
   list.forEach((it, i) => {
     const d = it.drug;
+    const info = infoOf(it);
     lines.push('');
     lines.push(`${i + 1}. ${itemName(it, lang)}${d?.brandEn ? ` (${d.brandEn})` : ''}`);
-    if (d?.use[lang]) lines.push(`- ${UI.purpose[lang]}: ${d.use[lang]}`);
-    lines.push(`- ${UI.howto[lang]}: ${directions(it, lang).join(' ')}`);
-    if (withKo) lines.push(`  (${directions(it, 'ko').join(' ')})`);
+    if (info.purpose) {
+      lines.push(`- ${UI.purpose[lang]}: ${info.purpose[lang]}`);
+      if (withKo && info.purpose.ko) lines.push(`  (${info.purpose.ko})`);
+    }
+    lines.push(`- ${UI.howto[lang]}: ${joinDir(directions(it, lang))}`);
+    if (withKo) lines.push(`  (${joinDir(directions(it, 'ko'))})`);
+    if (info.sideEffects.length || info.serious) {
+      lines.push(`- ${UI.sideEffects[lang]}:`);
+      info.sideEffects.forEach((s) => lines.push(`  • ${s[lang]}`));
+      if (info.serious) lines.push(`  ! ${info.serious[lang]}`);
+    }
     const cs = cautions(it, lang);
     if (cs.length) {
       lines.push(`- ${UI.caution[lang]}:`);

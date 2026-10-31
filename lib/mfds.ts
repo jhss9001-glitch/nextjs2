@@ -3,11 +3,14 @@
  *  - e약은요(의약품개요정보): 효능·사용법·주의사항 등 (일반의약품 위주)
  *  - 의약품 제품 허가정보: 전문의약품 포함 전체 품목, 분류·주성분
  * ========================================================= */
-import type { Drug, MfdsInfo, Route, UnitKey } from '@/lib/types';
+import { docXmlToText, parseDosage } from '@/lib/dosage-parse';
+import type { DosageCandidate, Drug, MfdsInfo, Route, UnitKey } from '@/lib/types';
 
 const BASE = 'https://apis.data.go.kr/1471000';
 const EASY_URL = `${BASE}/DrbEasyDrugInfoService/getDrbEasyDrugList`;
 const PERMIT_URL = `${BASE}/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08`;
+// 상세: 첨부문서 전체(수백 KB)가 함께 와서 20초 이상 걸릴 수 있음 → 결과를 캐시
+const DETAIL_URL = `${BASE}/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnDtlInq08`;
 
 type Row = Record<string, unknown>;
 
@@ -38,9 +41,9 @@ const pick = (r: Row, ...keys: string[]) => {
   return '';
 };
 
-async function callApi(url: string, params: Record<string, string>): Promise<Row[]> {
+async function callApi(url: string, params: Record<string, string>, timeoutMs = 8000): Promise<Row[]> {
   const qs = new URLSearchParams({ serviceKey: serviceKey(), type: 'json', pageNo: '1', ...params });
-  const res = await fetch(`${url}?${qs}`, { signal: AbortSignal.timeout(8000) });
+  const res = await fetch(`${url}?${qs}`, { signal: AbortSignal.timeout(timeoutMs) });
   const text = await res.text();
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
   let json: { header?: Row; body?: { items?: unknown }; response?: { header?: Row; body?: { items?: unknown } } };
@@ -108,6 +111,47 @@ function toDrug(info: MfdsInfo, itemName: string, engName: string, category: str
 const cache = new Map<string, { at: number; data: SearchResult }>();
 const TTL = 1000 * 60 * 60;
 
+export interface DetailResult {
+  itemSeq: string;
+  itemName: string;
+  ud: string; // 용법용량 원문
+  ee: string; // 효능효과 원문
+  se: string; // 사용상 주의사항 중 "이상반응" 항목 원문 (부작용 설명용)
+  candidates: DosageCandidate[];
+}
+
+/** 주의사항 문서(NB_DOC_DATA)에서 "이상반응/부작용" 항목만 텍스트로 (너무 길면 앞부분만) */
+function sideEffectSection(nbXml: string, limit = 8000): string {
+  const parts: string[] = [];
+  for (const m of nbXml.matchAll(/<ARTICLE[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/ARTICLE>/g)) {
+    if (/이상\s*반응|부작용/.test(m[1])) parts.push(docXmlToText(m[0]));
+  }
+  return parts.join('\n').slice(0, limit);
+}
+
+const detailCache = new Map<string, DetailResult>();
+
+/** 허가정보 상세 → 용법용량·효능효과 텍스트 + 용법 자동 입력 후보 */
+export async function getDetail(itemSeq: string, category = ''): Promise<DetailResult> {
+  const hit = detailCache.get(itemSeq);
+  if (hit) return hit;
+  const rows = await callApi(DETAIL_URL, { item_seq: itemSeq, numOfRows: '1' }, 55000);
+  const r = rows[0];
+  if (!r) throw new Error('허가정보 상세를 찾을 수 없습니다.');
+  const ud = docXmlToText(String(r.UD_DOC_DATA ?? ''));
+  const data: DetailResult = {
+    itemSeq,
+    itemName: pick(r, 'ITEM_NAME'),
+    ud,
+    ee: docXmlToText(String(r.EE_DOC_DATA ?? '')),
+    se: sideEffectSection(String(r.NB_DOC_DATA ?? '')),
+    candidates: parseDosage(ud, { itemName: pick(r, 'ITEM_NAME'), category })
+  };
+  detailCache.set(itemSeq, data);
+  if (detailCache.size > 500) detailCache.delete(detailCache.keys().next().value!);
+  return data;
+}
+
 export interface SearchResult {
   items: Drug[];
   warnings: string[];
@@ -137,8 +181,9 @@ export async function searchMfds(q: string): Promise<SearchResult> {
     if (!itemSeq || (status && status !== '정상')) continue; // 취소·취하 품목 제외
     byId.set(itemSeq, {
       name: pick(r, 'ITEM_NAME'),
-      // ITEM_ENG_NAME은 대부분 비어 있고, ITEM_INGR_NAME이 영문 성분명(예: Acetaminophen Granules)
-      eng: pick(r, 'ITEM_ENG_NAME', 'ITEM_INGR_NAME'),
+      // 영문명은 제품명만 사용 (환자에게는 제품명으로 안내). 비어 있으면 화면에서 한글 제품명을 자동 번역
+      // ITEM_INGR_NAME(영문 성분명)은 대신 쓰지 않음 — 예: 버제니오가 "Abemaciclib"로 나오던 문제
+      eng: pick(r, 'ITEM_ENG_NAME'),
       cat: pick(r, 'PRDUCT_TYPE'),
       info: {
         itemSeq,
