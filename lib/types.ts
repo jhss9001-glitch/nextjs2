@@ -14,8 +14,9 @@ export type UiKey = 'title' | 'pharmacy' | 'purpose' | 'howto' | 'sideEffects' |
 export type RouteSel = Route | 'custom' | 'none';
 export type UnitSel = UnitKey | 'custom' | 'none';
 export type TimingSel = TimingKey | 'custom' | 'none';
-/** 투여 주기: 매일('') | 격일 | 주 1회 | 직접 입력 */
-export type CycleKey = '' | 'alt' | 'weekly' | 'custom';
+/** 투여 주기: 매일('') | 격일 | 주 1회 | 선택 안 함 | 직접 입력 (매일·선택 안 함은 문장에 주기를 따로 쓰지 않음) */
+export type CycleKey = '' | 'alt' | 'weekly' | 'none' | 'custom';
+export const isDaily = (c: CycleKey) => c === '' || c === 'none';
 
 export type Tr = Record<Lang, string>;
 

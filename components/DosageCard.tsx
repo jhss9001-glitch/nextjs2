@@ -43,8 +43,7 @@ const UNIT_OPTS = [...Object.entries(UNITS).map(([k, u]) => opt(k, u.label)), op
 const EYE_UNIT_OPTS = [opt('drop', UNITS.drop.label), opt('none', `${NONE} (용량 빼기)`)];
 const FREQS = [...[1, 2, 3, 4, 5, 6].map((n) => opt(n, `${n}회`)), opt('prn', '필요시'), opt('none', NONE), opt('custom', CUSTOM)];
 const TIMING_OPTS = [...Object.entries(TIMINGS).map(([k, t]) => opt(k, t.label)), opt('none', NONE), opt('custom', CUSTOM)];
-// '매일'은 문장에 따로 쓰지 않으므로 선택 안 함과 같음
-const CYCLE_LABEL: Record<CycleKey, string> = { '': `매일 / ${NONE}`, alt: '격일', weekly: '주 1회', custom: CUSTOM };
+const CYCLE_LABEL: Record<CycleKey, string> = { '': '매일', alt: '격일', weekly: '주 1회', none: NONE, custom: CUSTOM };
 const CYCLES = (Object.keys(CYCLE_LABEL) as CycleKey[]).map((c) => opt(c, CYCLE_LABEL[c]));
 const DAY_PRESETS = [1, 2, 3, 4, 5, 6, 7, 10, 14, 28, 30, 60, 90];
 const INTERVAL_PRESETS = [4, 6, 8, 12];

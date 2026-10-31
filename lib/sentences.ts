@@ -1,5 +1,5 @@
 import { GENERAL, TIMINGS, UNITS } from '@/data/rx-data';
-import type { Item, Lang, TimingKey, Tr, UnitKey } from '@/lib/types';
+import { isDaily, type Item, type Lang, type TimingKey, type Tr, type UnitKey } from '@/lib/types';
 
 export const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : String(+n.toFixed(2)));
 
@@ -80,7 +80,7 @@ export const joinDir = (a: string[]) => a.filter(Boolean).join(' ');
 
 export function timingText(key: TimingKey, n: number, lang: Lang, cycle: Item['cycle'] = ''): string {
   // 격일·주 1회 등 매일이 아닐 때 "매일 같은 시간"은 모순되므로 "같은 시간"으로
-  if (key === 'same_time' && cycle) return lang === 'ko' ? '같은 시간에' : 'at the same time of day';
+  if (key === 'same_time' && !isDaily(cycle)) return lang === 'ko' ? '같은 시간에' : 'at the same time of day';
   const t = TIMINGS[key];
   if (lang === 'en' && n === 1 && t.en1) return t.en1;
   return t[lang];
@@ -158,7 +158,7 @@ export function directions(it: Item, lang: Lang): string[] {
   const q = qtyOf(it, lang);
   const f = prn ? '' : freqOf(it, lang);
   // 매일이 아니면 "N일간 복용"은 헷갈리므로 아래에서 "N일분"으로 따로 안내
-  const notDaily = !prn && it.cycle !== '';
+  const notDaily = !prn && !isDaily(it.cycle);
   const inlineDays = notDaily ? null : it.days;
   const takeLike = it.route === 'oral' || it.route === 'custom' || it.route === 'none'; // 기간을 문장 안에 넣는 경로
 
