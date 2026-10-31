@@ -14,6 +14,33 @@ export const restHintOf = (on: number, off: number): Tr => ({
   en: `Take it for ${durEn(on)}, then stop for ${durEn(off)}. Repeat this ${durEnAdj(on + off)} cycle.`,
   ko: `${durKo(on)}간 복용한 후 ${durKo(off)}간 쉬세요(${durKo(on + off)} 주기로 반복).`
 });
+/* 활성약 N일 + 위약 M일 (경구피임제 등): 쉬는 것이 아니라 위약까지 순서대로 계속 복용 */
+export const placeboHintOf = (on: number, off: number): Tr => ({
+  en: `Take the pills in the order shown on the pack: ${durEn(on)} of active pills, then ${durEn(off)} of inactive (placebo) pills. Do not skip any pill.`,
+  ko: `포장에 표시된 순서대로 복용하세요. 활성약 ${durKo(on)} 복용 후 위약 ${durKo(off)}을 이어서 먹습니다(빠뜨리지 마세요).`
+});
+
+const toDays = (n: string, u: string) => Number(n) * (u === '주' ? 7 : 1);
+
+/** "21일간 … 복용하고, 7일간 휴약" 같은 휴약 주기 → [복용일, 휴약일] */
+function restCycleOf(s: string): [number, number] | null {
+  const off = /(\d+)\s*(일|주)\s*(?:간|동안)?\s*(?:휴약|휴지|휴식|쉬)/.exec(s);
+  if (!off) return null;
+  const before = s.slice(0, off.index);
+  const ons = [...before.matchAll(/(\d+)\s*(일|주)\s*(?:간|동안)/g)].filter((m) =>
+    /투여|복용/.test(before.slice(m.index! + m[0].length))
+  );
+  const on = ons[ons.length - 1];
+  return on ? [toDays(on[1], on[2]), toDays(off[1], off[2])] : null;
+}
+
+/** "24일동안은 …(활성약), 이후 4일 동안은 …(위약)" → [활성약일, 위약일] */
+function placeboCycleOf(s: string): [number, number] | null {
+  const m = s.match(
+    /(\d+)\s*(일|주)\s*(?:간|동안)\s*(?:은|는)?[^.。\n]{0,20}?(?:활성|유효)[^.。\n]*?(\d+)\s*(일|주)\s*(?:간|동안)\s*(?:은|는)?[^.。\n]{0,20}?(?:위약|비활성)/
+  );
+  return m ? [toDays(m[1], m[2]), toDays(m[3], m[4])] : null;
+}
 
 /** 허가정보 XML(<DOC><SECTION><ARTICLE><PARAGRAPH><![CDATA[..]]>) → 줄 단위 텍스트 */
 export function docXmlToText(xml: string): string {
@@ -124,7 +151,8 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
   const fm =
     s.match(new RegExp(`(?:1일|하루)\\s*(\\d+)\\s*(?:${RANGE}\\s*(\\d+)\\s*)?(?:회|번)`)) ??
     s.match(new RegExp(`(?:1일|하루)[^.。\\n]{0,30}?(\\d+)\\s*(?:${RANGE}\\s*(\\d+)\\s*)?회\\s*(?:\\([^)]*\\))?\\s*(?:로|으로)?\\s*분할`));
-  const freqLo = fm ? Number(fm[1]) : null;
+  // "1일 1정씩"처럼 '회' 없이 1일 1개로 적힌 경우는 1일 1회
+  const freqLo = fm ? Number(fm[1]) : /(?:1일|하루)\s*1\s*(?:정|캡슐|포)\s*씩?(?!\d)/.test(s) ? 1 : null;
   const freqHi = fm?.[2] ? Number(fm[2]) : freqLo;
 
   // 1회 N정 / (200 mg 필름코팅정 2정) / 2정씩 / 1회 1병(30 mL)
@@ -148,14 +176,9 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
     }
   }
 
-  // 21일간 (연속하여) 투여하고 7일간 휴약 / 2주간 경구투여후 1주 휴약
-  // ("28일을 전체 주기로" 같은 주기 길이는 '간/동안'이 없어 제외됨)
-  const onD = s.match(/(\d+)\s*일\s*(?:간|동안)\s*(?:연속(?:하여|으로|적으로)?\s*)?(?:경구\s*)?(?:투여|복용)/);
-  const offD = s.match(/(\d+)\s*일\s*(?:간|동안)?\s*휴약/);
-  const onW = s.match(/(\d+)\s*주\s*(?:간|동안)\s*(?:연속(?:하여|으로|적으로)?\s*)?(?:경구\s*)?(?:투여|복용)/);
-  const offW = s.match(/(\d+)\s*주\s*(?:간|동안)?\s*휴약/);
-  const rest =
-    onD && offD ? [Number(onD[1]), Number(offD[1])] : onW && offW ? [Number(onW[1]) * 7, Number(offW[1]) * 7] : null;
+  // 휴약 주기(21일 복용 후 7일 휴약) 또는 활성약/위약 주기(24일 + 4일)
+  const placebo = placeboCycleOf(s);
+  const rest = placebo ? null : restCycleOf(s);
 
   // 투여 주기: 주 1회 / 격일 (그 밖의 휴약 주기는 약사가 직접 입력)
   const cycle: CycleKey | undefined =
@@ -165,7 +188,7 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
 
   const prn = /필요시|필요할\s*때|증상이\s*있을\s*때/.test(s);
   const intervalM = s.match(new RegExp(`(\\d+)\\s*(?:${RANGE}\\s*\\d+\\s*)?시간\\s*(?:마다|간격)`));
-  if (freqLo == null && !qm && !halfTab && !cycle && !rest && !(prn && intervalM)) return null;
+  if (freqLo == null && !qm && !halfTab && !cycle && !rest && !placebo && !(prn && intervalM)) return null;
   if (prn) {
     def.freq = 'prn';
     fields.push('freq');
@@ -194,7 +217,7 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
   // 복용 시점: 이 문장 → 문서 전체(확실한 표현만) → 항암·호르몬제 1일 1회면 매일 같은 시간
   const once = freqLo === 1 || cycle === 'weekly';
   let t = timingOf(s, once ? 1 : freqLo) ?? timingOfDoc(whole, once ? 1 : freqLo);
-  if (!t && freqLo === 1 && !cycle && /종양|항암|호르몬/.test(hints.category ?? '')) t = k('same_time');
+  if (!t && freqLo === 1 && !cycle && /종양|항암|호르몬|피임/.test(hints.category ?? '')) t = k('same_time');
   // "매일 같은 시간"은 주 1회·격일과 맞지 않으므로 "식사와 관계없이"로
   if (t?.key === 'same_time' && cycle) t = FOOD_ANY;
   // 주 1회·격일의 "12시간 간격으로 나누어"는 분할 복용 설명이지 시점이 아님
@@ -205,7 +228,7 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
     fields.push('timing');
   }
 
-  return { text: s.trim(), def, fields, ...(rest ? { restHint: restHintOf(rest[0], rest[1]) } : {}) };
+  return { text: s.trim(), def, fields, ...(placebo ? { restHint: placeboHintOf(placebo[0], placebo[1]) } : rest ? { restHint: restHintOf(rest[0], rest[1]) } : {}) };
 }
 
 /** 후보 정렬 점수: 권장 용법·완전한 용법 우선, 특수 환자군·병용은 뒤로 */

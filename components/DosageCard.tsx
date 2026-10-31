@@ -49,7 +49,7 @@ function summarize(c: DosageCandidate): string {
   else if (d.cycle === 'alt') parts.push('격일');
   if (d.qty) parts.push(`${d.qty}${d.unit ? UNITS[d.unit].label : ''}`);
   if (d.timing) parts.push(d.timing === 'custom' ? d.timingText?.ko || d.timingText?.en || '' : TIMINGS[d.timing].label);
-  if (c.restHint) parts.push('휴약 주기 있음');
+  if (c.restHint) parts.push('복용 주기 있음');
   if (d.interval) parts.push(`${d.interval}시간 간격`);
   if (d.max) parts.push(`최대 ${d.max}회`);
   return parts.join(' · ');
@@ -264,7 +264,7 @@ export default function DosageCard({
               {applied && <blockquote className="dosage-src">{applied.text}</blockquote>}
               {applied?.restHint && (
                 <div className="dosage-rest">
-                  <span>원문에 휴약 주기가 있습니다 — <b>{applied.restHint.ko}</b></span>
+                  <span>원문에 복용 주기(휴약·위약 기간)가 있습니다 — <b>{applied.restHint.ko}</b></span>
                   {hasNote(applied.restHint.en) ? (
                     <span className="label">주의사항에 추가됨</span>
                   ) : (
