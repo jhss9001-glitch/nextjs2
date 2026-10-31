@@ -113,7 +113,7 @@ export async function generate<T>(system: string, prompt: string, schema: object
 
 /** 역번역용 영어: 자리표시·단수형을 사람이 읽는 형태로 */
 const backSource = (kind: TranslateKind, en: string) =>
-  kind === 'unit' ? `2 ${en.split('|').pop() ?? en}` : kind === 'route' ? en.replace('{dose}', '(the dose)') : en;
+  kind === 'unit' ? en.split('|').map((w, i) => `${i + 1} ${w}`).join(', ') : kind === 'route' ? en.replace('{dose}', '(the dose)') : en;
 
 export async function translateKo(kind: TranslateKind, ko: string): Promise<TranslateResult> {
   const text = ko.trim();

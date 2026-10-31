@@ -14,9 +14,13 @@ interface TState {
   error?: string;
 }
 
-/** 번역 결과를 화면에 보여줄 형태로: 단위 "puff|puffs" → "puffs", 경로 "Inhale {dose}" → "Inhale …" */
-export const displayEn = (kind: TranslateKind, en: string) =>
-  kind === 'unit' ? en.split('|').pop() ?? en : kind === 'route' ? en.replace('{dose}', '…') : en;
+/** 번역 결과를 화면에 보여줄 형태로: 단위 "puff|puffs" → "puff / puffs", 경로 "Inhale {dose}" → "Inhale …" */
+export const displayEn = (kind: TranslateKind, en: string) => {
+  if (kind === 'route') return en.replace('{dose}', '…');
+  if (kind !== 'unit') return en;
+  const [sg, pl = sg] = en.split('|');
+  return sg === pl ? sg : `${sg} / ${pl}`;
+};
 
 /**
  * 한국어 → 영어 자동 번역 훅
