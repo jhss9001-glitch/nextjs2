@@ -13,7 +13,11 @@ type Row = Record<string, unknown>;
 
 function serviceKey(): string {
   const raw = process.env.MFDS_API_KEY?.trim();
-  if (!raw) throw new Error('MFDS_API_KEY가 설정되지 않았습니다. .env.local을 확인하세요.');
+  if (!raw) {
+    throw new Error(
+      'MFDS_API_KEY가 설정되지 않았습니다. (로컬: .env.local / Vercel: Settings → Environment Variables 추가 후 재배포)'
+    );
+  }
   // 포털의 Encoding 키를 넣었어도 동작하도록 한 번 디코딩 (URLSearchParams가 다시 인코딩함)
   return raw.includes('%') ? decodeURIComponent(raw) : raw;
 }

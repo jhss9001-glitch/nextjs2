@@ -466,6 +466,9 @@ button { cursor: pointer; }
 .span-2 { grid-column: 1 / -1; }
 .qty-field { grid-column: 1 / -1; display: grid; grid-template-columns: 3fr 2fr; gap: 8px; }
 .drug-option { padding: 8px 10px; }
+/* 키보드로 선택된 항목(초록 배경)에서도 둘째 줄이 읽히도록 */
+.drug-option[data-combobox-selected] .r-sub { color: var(--on-primary); opacity: .85; }
+.drug-option[data-combobox-selected] .badge { background: rgba(255, 255, 255, .2); color: var(--on-primary); }
 .search-error { color: var(--danger); }
 .out-title { margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
 
