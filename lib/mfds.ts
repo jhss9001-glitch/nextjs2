@@ -2,15 +2,19 @@
  * 식약처 공공데이터 API (서버 전용 — 클라이언트 컴포넌트에서 import 금지)
  *  - e약은요(의약품개요정보): 효능·사용법·주의사항 등 (일반의약품 위주)
  *  - 의약품 제품 허가정보: 전문의약품 포함 전체 품목, 분류·주성분
+ *  - 의약품 낱알식별 정보: 알약 사진·색·모양·각인 (환자 안내문용)
  * ========================================================= */
 import { decodeEntities, docXmlToText, parseDosage } from '@/lib/dosage-parse';
-import type { DosageCandidate, Drug, MfdsInfo, Route, UnitKey } from '@/lib/types';
+import { cleanPrint, pillForm } from '@/lib/pill';
+import type { DosageCandidate, Drug, MfdsInfo, PillInfo, Route, UnitKey } from '@/lib/types';
 
 const BASE = 'https://apis.data.go.kr/1471000';
 const EASY_URL = `${BASE}/DrbEasyDrugInfoService/getDrbEasyDrugList`;
 const PERMIT_URL = `${BASE}/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08`;
 // 상세: 첨부문서 전체(수백 KB)가 함께 와서 20초 이상 걸릴 수 있음 → 결과를 캐시
 const DETAIL_URL = `${BASE}/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnDtlInq08`;
+// 낱알식별: 공공데이터포털에서 별도 활용신청 필요 (같은 인증키)
+const PILL_URL = `${BASE}/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03`;
 
 type Row = Record<string, unknown>;
 
@@ -147,6 +151,33 @@ export async function getDetail(itemSeq: string, category = ''): Promise<DetailR
   detailCache.set(itemSeq, data);
   if (detailCache.size > 500) detailCache.delete(detailCache.keys().next().value!);
   return data;
+}
+
+const pillCache = new Map<string, PillInfo | null>();
+
+/** 낱알식별 정보 → 알약 사진·모양 (낱알 정보가 없는 품목(가루·시럽·연고 등)은 null) */
+export async function getPill(itemSeq: string): Promise<PillInfo | null> {
+  if (pillCache.has(itemSeq)) return pillCache.get(itemSeq)!;
+  const rows = await callApi(PILL_URL, { item_seq: itemSeq, numOfRows: '1' });
+  const r = rows[0];
+  let pill: PillInfo | null = null;
+  if (r) {
+    const long = pick(r, 'LENG_LONG'), short = pick(r, 'LENG_SHORT');
+    const line = (v: string) => /[-+|/]/.test(v); // 분할선 표시: "-", "+" 등
+    pill = {
+      image: pick(r, 'ITEM_IMAGE') || undefined,
+      colors: [pick(r, 'COLOR_CLASS1'), pick(r, 'COLOR_CLASS2')].join(',').split(/[,\s/]+/).filter(Boolean),
+      shape: pick(r, 'DRUG_SHAPE'),
+      form: pillForm(pick(r, 'FORM_CODE_NAME')),
+      front: cleanPrint(r.PRINT_FRONT) || undefined,
+      back: cleanPrint(r.PRINT_BACK) || undefined,
+      score: line(pick(r, 'LINE_FRONT')) || line(pick(r, 'LINE_BACK')),
+      size: long && short ? `${long} × ${short} mm` : undefined
+    };
+  }
+  pillCache.set(itemSeq, pill);
+  if (pillCache.size > 1000) pillCache.delete(pillCache.keys().next().value!);
+  return pill;
 }
 
 export interface SearchResult {

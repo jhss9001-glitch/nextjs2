@@ -1,11 +1,15 @@
 'use client';
 
-import { Accordion, ActionIcon, Button, TextInput } from '@mantine/core';
+import { Accordion, ActionIcon, Button, Loader, Switch, TextInput } from '@mantine/core';
 import { IconPlus, IconX } from '@tabler/icons-react';
 import KoInput from '@/components/KoInput';
+import PillPhoto from '@/components/PillPhoto';
+import { pillCaption } from '@/lib/pill';
 import type { Drug, MfdsInfo, Tr } from '@/lib/types';
 
-const MFDS_SECTIONS: [keyof MfdsInfo, string][] = [
+export type PillStatus = 'idle' | 'loading' | 'done' | 'error';
+
+const MFDS_SECTIONS: [Exclude<keyof MfdsInfo, 'pill'>, string][] = [
   ['efcy', '효능'],
   ['ud', '용법용량 (허가사항)'],
   ['useMethod', '사용법'],
@@ -31,6 +35,9 @@ export default function SelectedDrugCard({
   custom,
   customName,
   nameStatus,
+  pillStatus,
+  photo,
+  onPhoto,
   onClear,
   onEnName,
   onToggleCustom,
@@ -40,6 +47,9 @@ export default function SelectedDrugCard({
   custom: boolean;
   customName: Tr;
   nameStatus: 'idle' | 'loading' | 'error';
+  pillStatus: PillStatus;
+  photo: boolean; // 안내문에 사진·모양 넣기
+  onPhoto: (v: boolean) => void;
   onClear: () => void;
   onEnName: (v: string) => void;
   onToggleCustom: () => void;
@@ -47,6 +57,8 @@ export default function SelectedDrugCard({
 }) {
   const m = drug?.mfds;
   const sections = m ? MFDS_SECTIONS.filter(([k]) => m[k]) : [];
+  const pill = m?.pill;
+  const image = pill?.image || m?.image; // 알약 사진 우선, 없으면 제품 사진
 
   return (
     <div className="card" id="selectedDrug">
@@ -81,6 +93,32 @@ export default function SelectedDrugCard({
             onChange={onCustomName}
             autoFocus
           />
+        )}
+
+        {drug && m && (image || pill || pillStatus === 'loading') && (
+          <div className="drug-look">
+            {image && <PillPhoto src={image} alt={pill ? pillCaption(pill, 'ko') : drug.brand} />}
+            <div className="drug-look-txt">
+              {pill ? (
+                <>
+                  <span>{pillCaption(pill, 'ko')}</span>
+                  <span className="en" lang="en">{pillCaption(pill, 'en')}</span>
+                  {pill.size && <span className="sub">크기 {pill.size}</span>}
+                </>
+              ) : pillStatus === 'loading' ? (
+                <span className="sub"><Loader size={10} /> 낱알 모양 정보를 불러오는 중…</span>
+              ) : (
+                <span className="sub">낱알 모양 정보가 없는 품목입니다 (가루·시럽·연고 등). 제품 사진만 넣습니다.</span>
+              )}
+              <Switch
+                size="xs"
+                mt={4}
+                label="안내문에 사진·모양 넣기"
+                checked={photo}
+                onChange={(e) => onPhoto(e.currentTarget.checked)}
+              />
+            </div>
+          </div>
         )}
 
         {drug && (

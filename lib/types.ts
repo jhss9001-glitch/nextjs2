@@ -107,6 +107,19 @@ export interface MfdsInfo {
   deposit?: string; // 보관법
   image?: string;
   ud?: string; // 허가사항 용법용량 원문 (상세 API)
+  pill?: PillInfo; // 낱알식별 정보 (약을 고른 뒤 따로 불러옴)
+}
+
+/** 식약처 낱알식별 정보: 알약 사진 + 모양 (환자가 이름만으로 약을 구분하기 어려울 때) */
+export interface PillInfo {
+  image?: string; // 알약 사진
+  colors: string[]; // 식약처 색 이름 그대로 ("하양", "노랑" …)
+  shape: string; // "원형" | "타원형" | "장방형" …
+  form: 'tablet' | 'capsule' | 'softcap';
+  front?: string; // 앞면 각인 (영문·숫자)
+  back?: string; // 뒷면 각인
+  score: boolean; // 분할선 여부
+  size?: string; // "19.2 × 7.8 mm"
 }
 
 export interface Drug {
@@ -141,6 +154,7 @@ export interface Item {
   info: PatientInfo; // 무슨 약인지·부작용
   general: GeneralKey[];
   notes: Tr[]; // 직접 입력한 주의사항 (en 필수, ko 선택)
+  photo: boolean; // 안내문·스크립트에 약 사진·모양 설명 넣기
 }
 
 /** 폼 입력값 */
@@ -158,6 +172,7 @@ export interface FormState {
   info: PatientInfo;
   general: GeneralKey[];
   notes: Tr[];
+  photo: boolean;
 }
 
 export interface ScriptBlock {

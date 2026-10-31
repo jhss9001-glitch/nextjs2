@@ -214,6 +214,11 @@ export function cautions(it: Item, lang: Lang): { t: string; ko: string }[] {
   return list;
 }
 
+/** 안내문에 넣을 약 사진: 낱알식별 알약 사진 → 없으면 식약처 제품 사진 (스위치를 끄면 없음) */
+export const photoOf = (it: Item) => (it.photo ? it.drug?.mfds?.pill?.image || it.drug?.mfds?.image : undefined);
+/** 안내문·스크립트에 넣을 낱알 모양 정보 */
+export const pillOf = (it: Item) => (it.photo ? it.drug?.mfds?.pill : undefined);
+
 export function itemTitle(it: Item): string {
   return it.drug ? it.drug.brand : it.customName.ko;
 }

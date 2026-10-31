@@ -1,5 +1,6 @@
 import { UI } from '@/data/rx-data';
-import { cautions, directions, infoOf, itemName, joinDir } from '@/lib/sentences';
+import { pillCaption } from '@/lib/pill';
+import { cautions, directions, infoOf, itemName, joinDir, pillOf } from '@/lib/sentences';
 import type { Item, Lang } from '@/lib/types';
 
 export const LOCALE: Record<Lang, string> = { ko: 'ko-KR', en: 'en-US' };
@@ -18,6 +19,11 @@ export function plainText(list: Item[], lang: Lang, withKo: boolean, pharmacy: s
     const info = infoOf(it);
     lines.push('');
     lines.push(`${i + 1}. ${itemName(it, lang)}${d?.brandEn ? ` (${d.brandEn})` : ''}`);
+    const pill = pillOf(it);
+    if (pill) {
+      lines.push(`- ${lang === 'en' ? 'Looks like' : '모양'}: ${pillCaption(pill, lang)}`);
+      if (withKo && lang === 'en') lines.push(`  (${pillCaption(pill, 'ko')})`);
+    }
     if (info.purpose) {
       lines.push(`- ${UI.purpose[lang]}: ${info.purpose[lang]}`);
       if (withKo && info.purpose.ko) lines.push(`  (${info.purpose.ko})`);

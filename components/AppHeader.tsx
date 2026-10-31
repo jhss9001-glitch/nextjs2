@@ -1,5 +1,6 @@
 'use client';
 
+import BrandMark from '@/components/BrandMark';
 import { displayEn, useAutoTranslate } from '@/components/KoInput';
 import type { Tr } from '@/lib/types';
 
@@ -18,13 +19,17 @@ export default function AppHeader({
     <header className="topbar">
       <div className="topbar-inner">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">Rx</span>
-          <span className="brand-name">영문 복약지도</span>
-          <span className="brand-ver">v2 · MFDS</span>
+          <BrandMark />
+          <span className="brand-word">
+            <strong>약속</strong>
+            <span>YAKSOK · 영문 복약지도</span>
+          </span>
         </div>
         <div className="topbar-search">{search}</div>
         <label className="topbar-pharmacy">
-          약국
+          {/* 약국명 첫 글자 (비어 있으면 '약') */}
+          <span className="pharmacy-mark" aria-hidden="true">{pharmacy.ko.trim().charAt(0) || '약'}</span>
+          <span className="sr-only">약국명</span>
           <span className="pharmacy-box">
             <input
               id="pharmacyName"

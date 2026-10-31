@@ -7,7 +7,8 @@ import DosageCard from '@/components/DosageCard';
 import DrugSearch from '@/components/DrugSearch';
 import OutputPanel from '@/components/OutputPanel';
 import RxList from '@/components/RxList';
-import SelectedDrugCard from '@/components/SelectedDrugCard';
+import SelectedDrugCard, { type PillStatus } from '@/components/SelectedDrugCard';
+import Steps from '@/components/Steps';
 import Toast from '@/components/Toast';
 import { useSpeech } from '@/hooks/useSpeech';
 import { useToast } from '@/hooks/useToast';
@@ -26,6 +27,7 @@ import {
   type FormState,
   type Item,
   type PatientInfo,
+  type PillInfo,
   type RouteSel,
   type Tr
 } from '@/lib/types';
@@ -56,6 +58,7 @@ export default function RxApp() {
   const [dosage, setDosage] = useState<DosageState>(IDLE);
   const [autoFields, setAutoFields] = useState<(keyof FormState)[]>([]);
   const [nameStatus, setNameStatus] = useState<'idle' | 'loading' | 'error'>('idle'); // 영문명 자동 번역 상태
+  const [pillStatus, setPillStatus] = useState<PillStatus>('idle'); // 낱알식별(사진·모양) 불러오기 상태
   // 환자 설명(무슨 약·부작용) 자동 요약 상태
   const [infoState, setInfoState] = useState<InfoState>({ status: 'idle' });
   const [backs, setBacks] = useState<Record<string, string>>({}); // 자동 요약 영어 → 역번역
@@ -153,10 +156,27 @@ export default function RxApp() {
     setDosage((s) => ({ ...s, selected: i }));
   };
 
+  /** 식약처 낱알식별 → 알약 사진·모양 (안내문에서 환자가 실물과 맞춰 보게) */
+  const loadPill = (d: Drug) => {
+    if (!d.mfds || d.mfds.pill) return;
+    const itemSeq = d.mfds.itemSeq;
+    setPillStatus('loading');
+    fetch(`/api/drugs/pill?itemSeq=${encodeURIComponent(itemSeq)}`)
+      .then((r) => r.json())
+      .then((j: { pill?: PillInfo | null; error?: string }) => {
+        if (j.error) { setPillStatus('error'); return; }
+        setPillStatus('done');
+        const pill = j.pill;
+        if (pill) setDrug((cur) => (cur?.mfds?.itemSeq === itemSeq ? { ...cur, mfds: { ...cur.mfds, pill } } : cur));
+      })
+      .catch(() => setPillStatus('error'));
+  };
+
   /* ---------------- 약 선택 ---------------- */
   const selectDrug = (d: Drug) => {
     resetDosage();
     resetInfo();
+    setPillStatus('idle');
     setDrug(d);
     setCustom(false);
     const base = makeForm(d.def, d.general || [], d.route);
@@ -164,6 +184,7 @@ export default function RxApp() {
     setAutoFields(['route']);
     if (!d.mfds) return;
     loadInfo(d);
+    loadPill(d);
 
     // 0) 식약처에 영문명이 없으면 한글 제품명을 영어 이름으로 자동 번역 (영어 안내문에 한글이 섞이지 않게)
     if (!d.ing.en) {
@@ -358,6 +379,7 @@ export default function RxApp() {
         onPharmacyChange={changePharmacy}
         search={<DrugSearch onSelect={selectDrug} inputRef={searchRef} />}
       />
+      <Steps drugName={drug ? koProductName(drug.brand) : custom ? customName.ko.trim() || '직접 입력한 약' : null} count={list.length} />
       <main className="workspace">
         <section className="col col-input" aria-label="조제 입력">
           <SelectedDrugCard
@@ -365,6 +387,9 @@ export default function RxApp() {
             custom={custom}
             customName={customName}
             nameStatus={nameStatus}
+            pillStatus={pillStatus}
+            photo={form.photo}
+            onPhoto={(photo) => setForm((f) => ({ ...f, photo }))}
             onClear={clearDrug}
             onEnName={changeEnName}
             onToggleCustom={toggleCustom}

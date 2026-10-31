@@ -29,7 +29,8 @@ export function makeForm(def: DrugDefaults, general: GeneralKey[], route: Route)
     texts,
     info: emptyInfo(),
     general,
-    notes: []
+    notes: [],
+    photo: true
   };
 }
 
@@ -120,7 +121,8 @@ export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, fo
     },
     info: cleanInfo(form.info),
     general: form.general,
-    notes: form.notes
+    notes: form.notes,
+    photo: form.photo
   };
 }
 
@@ -150,6 +152,7 @@ export function itemToForm(it: Item): FormState {
       hide: { ...it.info.hide }
     },
     general: it.general,
-    notes: it.notes
+    notes: it.notes,
+    photo: it.photo ?? true
   };
 }

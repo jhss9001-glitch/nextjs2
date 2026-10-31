@@ -1,5 +1,7 @@
+import { pillSentence } from '@/lib/pill';
 import {
-  cautions, enTail, fmtNum, freqOf, infoOf, itemName, itemTitle, koHead, NO_DOSE_EN, qtyOf, routePhrase, routeVerbKo, tidy, timingOf, tx
+  cautions, enTail, fmtNum, freqOf, infoOf, itemName, itemTitle, koHead, NO_DOSE_EN, pillOf, qtyOf, routePhrase, routeVerbKo, tidy,
+  timingOf, tx
 } from '@/lib/sentences';
 import type { Item, Lang, ScriptBlock } from '@/lib/types';
 
@@ -162,6 +164,9 @@ export function buildScript(list: Item[], lang: Lang): ScriptBlock[] {
     // 순서: 약 이름 → 무슨 약 → 복용법 → 부작용(→ 바로 병원에) → 주의사항
     // "Amoxapen Cap." 처럼 마침표로 끝나는 이름은 문장 끝 마침표와 겹치지 않게
     const lines = [SP.intro[lang](i, total, itemName(it, lang)).replace(/\.\.$/, '.')];
+    // 약 모양: "It is a white oval tablet, marked …" (이름만으로 모를 때 실물과 맞춰 보게)
+    const pill = pillOf(it);
+    if (pill) lines.push(pillSentence(pill, lang));
     if (info.purpose) lines.push(info.purpose[lang]);
     lines.push(...spokenDirections(it, lang));
     if (info.sideEffects.length || info.serious) {

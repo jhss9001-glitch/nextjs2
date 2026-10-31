@@ -1,6 +1,9 @@
+import BrandMark from '@/components/BrandMark';
+import PillPhoto from '@/components/PillPhoto';
 import { UI } from '@/data/rx-data';
+import { pillCaption } from '@/lib/pill';
 import { today } from '@/lib/plain-text';
-import { cautions, directions, infoOf, itemName, koProductName } from '@/lib/sentences';
+import { cautions, directions, infoOf, itemName, koProductName, photoOf, pillOf } from '@/lib/sentences';
 import type { Item } from '@/lib/types';
 
 const lang = 'en';
@@ -32,12 +35,28 @@ export default function GuideView({ list, showKo, pharmacy }: { list: Item[]; sh
         const info = infoOf(it);
         // 한국어 병기: 영어 이름과 짝이 맞는 한글 제품명 (성분명은 넣지 않음)
         const koName = d ? koProductName(d.brand) : '';
+        // 약 사진·모양: 환자가 이름만 보고 어떤 약인지 모를 때 실물과 맞춰 보게
+        const photo = photoOf(it);
+        const pill = pillOf(it);
         return (
           <section className="g-item" key={i}>
             <span className="g-num">{String(i + 1).padStart(2, '0')}</span>
-            <div>
-              <div className="g-name">{itemName(it, lang)}</div>
-              {showKo && koName && <div className="g-name-ko" lang="ko">{koName}</div>}
+            <div className="g-head">
+              <div>
+                <div className="g-name">{itemName(it, lang)}</div>
+                {showKo && koName && <div className="g-name-ko" lang="ko">{koName}</div>}
+              </div>
+              {(photo || pill) && (
+                <figure className="g-photo">
+                  {photo && <PillPhoto src={photo} alt={pill ? pillCaption(pill, 'en') : itemName(it, lang)} />}
+                  {pill && (
+                    <figcaption>
+                      {pillCaption(pill, 'en')}
+                      <KoLine text={pillCaption(pill, 'ko')} show={showKo} />
+                    </figcaption>
+                  )}
+                </figure>
+              )}
             </div>
             <dl className="g-dl">
               {info.purpose && (
@@ -78,7 +97,10 @@ export default function GuideView({ list, showKo, pharmacy }: { list: Item[]; sh
         );
       })}
 
-      <footer className="paper-foot">{UI.footer[lang]}</footer>
+      <footer className="paper-foot">
+        <span>{UI.footer[lang]}</span>
+        <span className="paper-made"><BrandMark size={14} /> Made with YakSok</span>
+      </footer>
     </article>
   );
 }
