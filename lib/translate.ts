@@ -42,7 +42,8 @@ const KIND_PROMPT: Record<TranslateKind, string> = {
     'e.g. "puff|puffs", "suppository|suppositories", "patch|patches".',
   freq:
     'How often to use the medicine. It completes "Take 1 tablet ___" — return only that phrase, ' +
-    'e.g. "3 to 4 times a day", "every morning and evening".',
+    'e.g. "3 to 4 times a day", "every morning and evening", "several times", "repeatedly". ' +
+    'It is a frequency only. If the Korean is not about how often (for example it describes HOW to apply or use the medicine), return an empty string.',
   timing:
     'When to use the medicine. It completes "Take 1 tablet once a day, ___." — return only that phrase without a period, ' +
     'e.g. "after brushing your teeth", "1 hour before breakfast".',
@@ -123,7 +124,13 @@ export async function translateKo(kind: TranslateKind, ko: string): Promise<Tran
 
   // 1) 한국어 → 영어 (항목별 형식 지시 포함)
   const out = await generate<{ en?: string }>(SYSTEM, `Field: ${kind}\n${KIND_PROMPT[kind]}\n\nKorean input:\n${text}`, SCHEMA);
-  if (!out.en?.trim()) throw new Error('입력한 내용을 이해하지 못했습니다. 문장을 조금 더 분명하게 써 주세요.');
+  if (!out.en?.trim()) {
+    throw new Error(
+      kind === 'freq'
+        ? '횟수 표현으로 번역할 수 없습니다. 이 칸에는 "하루 3~4번", "여러 번 반복하여"처럼 횟수만 쓰고, 사용 방법 설명은 아래 "+ 직접 입력"(주의사항)에 쓰세요.'
+        : '입력한 내용을 이해하지 못했습니다. 문장을 조금 더 분명하게 써 주세요.'
+    );
+  }
   const en = normalize(kind, out.en);
 
   // 2) 영어 → 한국어 (원문을 모르는 상태에서 역번역, 실패해도 번역 자체는 사용)

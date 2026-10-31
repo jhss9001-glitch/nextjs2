@@ -42,7 +42,8 @@ export function freqText(n: number, lang: Lang): string {
 export function freqOf(it: Item, lang: Lang): string {
   if (it.cycle === 'weekly') return lang === 'ko' ? '주 1회' : 'once a week';
   const n = Number(it.freq);
-  const base = it.freq === 'custom' ? tx(it.texts.freq, lang) : freqText(n, lang);
+  // 직접 입력한 횟수는 문장 중간에 들어가므로 끝의 마침표는 뗌
+  const base = it.freq === 'custom' ? tx(it.texts.freq, lang).replace(/[.。]$/, '') : freqText(n, lang);
   if (it.cycle === 'alt') {
     if (lang === 'ko') return n === 1 ? '격일로' : `격일로 ${base}`;
     return n === 1 ? 'every other day' : `${base}, every other day`;

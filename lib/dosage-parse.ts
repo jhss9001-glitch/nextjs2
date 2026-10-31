@@ -42,6 +42,24 @@ function placeboCycleOf(s: string): [number, number] | null {
   return m ? [toDays(m[1], m[2]), toDays(m[3], m[4])] : null;
 }
 
+/** HTML 엔티티 복원: &#x301c; &#12316; &nbsp; &lt; &gt; &amp; &quot; (&amp;#x301c; 처럼 두 번 감싼 것도 처리) */
+export function decodeEntities(s: string): string {
+  const once = (v: string) =>
+    v
+      .replace(/&#x([0-9a-f]+);/gi, (m, h) => safeChar(parseInt(h, 16), m))
+      .replace(/&#(\d+);/g, (m, d) => safeChar(Number(d), m))
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&');
+  return once(once(s));
+}
+const safeChar = (cp: number, orig: string) => {
+  try { return String.fromCodePoint(cp); } catch { return orig; }
+};
+
 /** 허가정보 XML(<DOC><SECTION><ARTICLE><PARAGRAPH><![CDATA[..]]>) → 줄 단위 텍스트 */
 export function docXmlToText(xml: string): string {
   if (!xml) return '';
@@ -49,13 +67,11 @@ export function docXmlToText(xml: string): string {
   const re = /<ARTICLE[^>]*title="([^"]*)"|<!\[CDATA\[([\s\S]*?)\]\]>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml))) {
-    const t = (m[1] ?? m[2] ?? '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
+    const t = decodeEntities(
+      (m[1] ?? m[2] ?? '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+    )
       .replace(/[ \t]+/g, ' ')
       .trim();
     if (t) lines.push(t);

@@ -3,7 +3,7 @@
  *  - e약은요(의약품개요정보): 효능·사용법·주의사항 등 (일반의약품 위주)
  *  - 의약품 제품 허가정보: 전문의약품 포함 전체 품목, 분류·주성분
  * ========================================================= */
-import { docXmlToText, parseDosage } from '@/lib/dosage-parse';
+import { decodeEntities, docXmlToText, parseDosage } from '@/lib/dosage-parse';
 import type { DosageCandidate, Drug, MfdsInfo, Route, UnitKey } from '@/lib/types';
 
 const BASE = 'https://apis.data.go.kr/1471000';
@@ -27,10 +27,7 @@ function serviceKey(): string {
 
 /** HTML 태그·연속 공백 제거 */
 export function clean(v: unknown): string {
-  return String(v ?? '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
+  return decodeEntities(String(v ?? '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''))
     .replace(/[ \t]+/g, ' ')
     .replace(/\n\s*\n+/g, '\n')
     .trim();
@@ -41,7 +38,7 @@ const pick = (r: Row, ...keys: string[]) => {
   return '';
 };
 
-async function callApi(url: string, params: Record<string, string>, timeoutMs = 8000): Promise<Row[]> {
+async function callApi(url: string, params: Record<string, string>, timeoutMs = 25000): Promise<Row[]> {
   const qs = new URLSearchParams({ serviceKey: serviceKey(), type: 'json', pageNo: '1', ...params });
   const res = await fetch(`${url}?${qs}`, { signal: AbortSignal.timeout(timeoutMs) });
   const text = await res.text();
