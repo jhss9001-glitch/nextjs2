@@ -116,7 +116,22 @@ export async function generate<T>(system: string, prompt: string, schema: object
 const backSource = (kind: TranslateKind, en: string) =>
   kind === 'unit' ? en.split('|').map((w, i) => `${i + 1} ${w}`).join(', ') : kind === 'route' ? en.replace('{dose}', '(the dose)') : en;
 
-export async function translateKo(kind: TranslateKind, ko: string): Promise<TranslateResult> {
+const backCache = new Map<string, string>();
+
+/** 영어 → 한국어 역번역만 (화면은 영어를 먼저 보여 주고 이 결과는 뒤따라 붙임) */
+export async function backTranslate(kind: TranslateKind, en: string): Promise<string> {
+  const key = `${kind}\u0000${en}`;
+  const hit = backCache.get(key);
+  if (hit != null) return hit;
+  const b = await generate<{ ko?: string }>(BACK_SYSTEM, `English:\n${backSource(kind, en)}`, BACK_SCHEMA);
+  const back = (b.ko ?? '').trim();
+  backCache.set(key, back);
+  if (backCache.size > 2000) backCache.delete(backCache.keys().next().value!);
+  return back;
+}
+
+/** withBack=false면 영어만 먼저 돌려줌 (역번역은 backTranslate로 따로) */
+export async function translateKo(kind: TranslateKind, ko: string, withBack = true): Promise<TranslateResult> {
   const text = ko.trim();
   const key = `${kind}\u0000${text}`;
   const hit = cache.get(key);
@@ -128,16 +143,19 @@ export async function translateKo(kind: TranslateKind, ko: string): Promise<Tran
     throw new Error(
       kind === 'freq'
         ? '횟수 표현으로 번역할 수 없습니다. 이 칸에는 "하루 3~4번", "여러 번 반복하여"처럼 횟수만 쓰고, 사용 방법 설명은 아래 "+ 직접 입력"(주의사항)에 쓰세요.'
-        : '입력한 내용을 이해하지 못했습니다. 문장을 조금 더 분명하게 써 주세요.'
+        : kind === 'note'
+          ? '끝맺지 않은 문구라 번역할 수 없습니다. 문장을 끝까지 써 주세요. (예: "면봉에 적셔서 바르세요.")'
+          : '입력한 내용을 이해하지 못했습니다. 문장을 조금 더 분명하게 써 주세요.'
     );
   }
   const en = normalize(kind, out.en);
 
+  if (!withBack) return { en, back: '' };
+
   // 2) 영어 → 한국어 (원문을 모르는 상태에서 역번역, 실패해도 번역 자체는 사용)
   let back = '';
   try {
-    const b = await generate<{ ko?: string }>(BACK_SYSTEM, `English:\n${backSource(kind, en)}`, BACK_SCHEMA);
-    back = (b.ko ?? '').trim();
+    back = await backTranslate(kind, en);
   } catch { /* 역번역 실패는 무시 */ }
 
   const result = { en, back };

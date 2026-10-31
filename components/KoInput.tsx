@@ -11,6 +11,7 @@ interface TState {
   ko: string; // 이 상태가 어떤 한국어에 대한 것인지
   status: 'idle' | 'loading' | 'done' | 'error';
   back?: string;
+  backPending?: boolean; // 영어는 받았고 확인용 한국어(역번역)를 기다리는 중
   error?: string;
 }
 
@@ -27,7 +28,7 @@ export const displayEn = (kind: TranslateKind, en: string) => {
  *  - value.ko가 바뀌고 value.en이 비어 있으면 잠시 뒤 서버(/api/translate)에 번역 요청
  *  - 결과가 도착했을 때 입력이 그대로면 onChange({ ko, en })
  */
-export function useAutoTranslate(kind: TranslateKind, value: Tr, onChange: (v: Tr) => void, delay = 1000) {
+export function useAutoTranslate(kind: TranslateKind, value: Tr, onChange: (v: Tr) => void, delay = 700) {
   const [st, setSt] = useState<TState>({ ko: '', status: 'idle' });
   const [nonce, setNonce] = useState(0);
   const latest = useRef({ value, onChange });
@@ -44,15 +45,26 @@ export function useAutoTranslate(kind: TranslateKind, value: Tr, onChange: (v: T
       fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, ko }),
+        // 영어를 먼저 받아 바로 보여 주고, 확인용 역번역은 뒤이어 따로 받음 (체감 속도)
+        body: JSON.stringify({ kind, ko, noBack: true }),
         signal: ctrl.signal
       })
         .then((r) => r.json())
         .then((j: { en?: string; back?: string; error?: string }) => {
           if (j.error || !j.en) { setSt({ ko, status: 'error', error: j.error || '번역 결과가 비어 있습니다.' }); return; }
-          setSt({ ko, status: 'done', back: j.back });
+          const en = j.en;
+          setSt({ ko, status: 'done', backPending: true });
           const cur = latest.current;
-          if (cur.value.ko.trim() === ko) cur.onChange({ ko: cur.value.ko, en: j.en });
+          if (cur.value.ko.trim() === ko) cur.onChange({ ko: cur.value.ko, en });
+          // 이 요청은 영어가 채워지면 effect 정리로 취소되므로 별도 요청으로 보냄
+          fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind, ko, en, backOnly: true })
+          })
+            .then((r) => r.json())
+            .then((b: { back?: string }) => setSt((s) => (s.ko === ko ? { ko, status: 'done', back: b.back || undefined } : s)))
+            .catch(() => setSt((s) => (s.ko === ko ? { ko, status: 'done' } : s)));
         })
         .catch((e: Error) => {
           if (e.name !== 'AbortError') setSt({ ko, status: 'error', error: e.message });
@@ -68,7 +80,8 @@ export function useAutoTranslate(kind: TranslateKind, value: Tr, onChange: (v: T
     error: mine && st.status === 'error' && !value.en ? st.error : undefined,
     back: mine && value.en ? st.back : undefined,
     // 방금 번역했는데 역번역을 못 받은 경우 (사용량 한도 등) → 약사가 확인 없이 넘어가지 않게 표시
-    backMissing: mine && !!value.en && st.status === 'done' && !st.back,
+    backPending: mine && !!value.en && !!st.backPending,
+    backMissing: mine && !!value.en && st.status === 'done' && !st.back && !st.backPending,
     retry: () => setNonce((n) => n + 1)
   };
 }
@@ -135,6 +148,9 @@ export default function KoInput({
               <span className="tr-en" lang="en"><IconLanguage size={12} /> {displayEn(kind, value.en)}</span>
               {tr.back && (
                 <span className="tr-back"><IconArrowBackUp size={12} /> 다시 한국어로: {tr.back}</span>
+              )}
+              {tr.backPending && !tr.back && (
+                <span className="tr-back"><Loader size={10} /> 확인용 한국어 번역 중…</span>
               )}
               {tr.backMissing && (
                 <span className="tr-back err">
