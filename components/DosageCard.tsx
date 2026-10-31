@@ -22,19 +22,29 @@ import type {
   UnitSel
 } from '@/lib/types';
 
-export const ROUTE_LABEL: Record<Exclude<RouteSel, 'custom'>, string> = { oral: '내복', eye: '점안', topical: '외용' };
+export const ROUTE_LABEL: Record<Exclude<RouteSel, 'custom' | 'none'>, string> = { oral: '내복', eye: '점안', topical: '외용' };
 /** 목록 표시용 경로 이름 (직접 입력이면 입력한 한국어 → 영어) */
 export const routeLabel = (it: Pick<Item, 'route' | 'texts'>) =>
-  it.route === 'custom' ? it.texts.route.ko.replace(/하세요\.?$/, '') || it.texts.route.en || '기타' : ROUTE_LABEL[it.route];
+  it.route === 'none'
+    ? '사용'
+    : it.route === 'custom'
+      ? it.texts.route.ko.replace(/하세요\.?$/, '') || it.texts.route.en || '기타'
+      : ROUTE_LABEL[it.route];
 
 const CUSTOM = '직접 입력…';
+// 선택 안 함: 그 항목을 문장에서 빼고 나머지만으로 자연스럽게 이어 붙임
+const NONE = '선택 안 함';
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
 const opt = (value: string | number, label: string) => ({ value: String(value), label });
-const ROUTES = [opt('oral', '내복 (먹는 약)'), opt('eye', '점안 (안약)'), opt('topical', '외용 (바르는 약)'), opt('custom', CUSTOM)];
-const UNIT_OPTS = [...Object.entries(UNITS).map(([k, u]) => opt(k, u.label)), opt('custom', CUSTOM)];
-const FREQS = [...[1, 2, 3, 4, 5, 6].map((n) => opt(n, `${n}회`)), opt('prn', '필요시'), opt('custom', CUSTOM)];
-const TIMING_OPTS = [...Object.entries(TIMINGS).map(([k, t]) => opt(k, t.label)), opt('custom', CUSTOM)];
-const CYCLE_LABEL: Record<CycleKey, string> = { '': '매일', alt: '격일', weekly: '주 1회', custom: CUSTOM };
+const ROUTES = [
+  opt('oral', '내복 (먹는 약)'), opt('eye', '점안 (안약)'), opt('topical', '외용 (바르는 약)'), opt('none', `${NONE} (“사용하세요”)`), opt('custom', CUSTOM)
+];
+const UNIT_OPTS = [...Object.entries(UNITS).map(([k, u]) => opt(k, u.label)), opt('none', `${NONE} (용량 빼기)`), opt('custom', CUSTOM)];
+const EYE_UNIT_OPTS = [opt('drop', UNITS.drop.label), opt('none', `${NONE} (용량 빼기)`)];
+const FREQS = [...[1, 2, 3, 4, 5, 6].map((n) => opt(n, `${n}회`)), opt('prn', '필요시'), opt('none', NONE), opt('custom', CUSTOM)];
+const TIMING_OPTS = [...Object.entries(TIMINGS).map(([k, t]) => opt(k, t.label)), opt('none', NONE), opt('custom', CUSTOM)];
+// '매일'은 문장에 따로 쓰지 않으므로 선택 안 함과 같음
+const CYCLE_LABEL: Record<CycleKey, string> = { '': `매일 / ${NONE}`, alt: '격일', weekly: '주 1회', custom: CUSTOM };
 const CYCLES = (Object.keys(CYCLE_LABEL) as CycleKey[]).map((c) => opt(c, CYCLE_LABEL[c]));
 const DAY_PRESETS = [1, 2, 3, 4, 5, 6, 7, 10, 14, 28, 30, 60, 90];
 const INTERVAL_PRESETS = [4, 6, 8, 12];
@@ -48,7 +58,7 @@ function summarize(c: DosageCandidate): string {
   else if (d.freq) parts.push(d.freq === 'prn' ? '필요시' : `${d.cycle === 'alt' ? '격일 · ' : ''}1일 ${d.freq}회`);
   else if (d.cycle === 'alt') parts.push('격일');
   if (d.qty) parts.push(`${d.qty}${d.unit ? UNITS[d.unit].label : ''}`);
-  if (d.timing) parts.push(d.timing === 'custom' ? d.timingText?.ko || d.timingText?.en || '' : TIMINGS[d.timing].label);
+  if (d.timing && d.timing !== 'none') parts.push(d.timing === 'custom' ? d.timingText?.ko || d.timingText?.en || '' : TIMINGS[d.timing].label);
   if (c.restHint) parts.push('복용 주기 있음');
   if (d.interval) parts.push(`${d.interval}시간 간격`);
   if (d.max) parts.push(`최대 ${d.max}회`);
@@ -132,7 +142,7 @@ function NumSelect({
   }
   const isPreset = value === '' || presets.map(String).includes(value);
   const custom = customFlag || !isPreset;
-  const data = [opt('', '—'), ...presets.map((n) => opt(n, `${n}${suffix}`)), opt('__custom__', CUSTOM)];
+  const data = [opt('', NONE), ...presets.map((n) => opt(n, `${n}${suffix}`)), opt('__custom__', CUSTOM)];
 
   return (
     <div className={`num-select ${className ?? ''}`}>
@@ -196,7 +206,9 @@ export default function DosageCard({
   const route = form.route;
   const prn = form.freq === 'prn';
   const auto = !!drug && form.route === drug.route;
-  const showTiming = (route === 'oral' || route === 'custom') && !prn;
+  const takeLike = route === 'oral' || route === 'custom' || route === 'none'; // 복용 시점·최소 간격을 묻는 경로
+  const showTiming = takeLike && !prn;
+  const noDose = form.unit === 'none';
   // 식약처 정보로 자동 입력된 칸: 연한 초록 + 라벨에 "· 자동"
   const isAuto = (k: keyof FormState) => autoFields.includes(k);
   const af = (k: keyof FormState, label: string) => ({
@@ -235,7 +247,7 @@ export default function DosageCard({
     <div className="card">
       <div className="card-head">
         <div className="card-title">용법</div>
-        {drug && !auto && route !== 'custom' && <span className="card-meta">경로 수동 변경 · 자동값 {ROUTE_LABEL[drug.route]}</span>}
+        {drug && !auto && route !== 'custom' && route !== 'none' && <span className="card-meta">경로 수동 변경 · 자동값 {ROUTE_LABEL[drug.route]}</span>}
       </div>
 
       {dosage.status !== 'idle' && (
@@ -317,15 +329,16 @@ export default function DosageCard({
               min={0.5}
               step={0.5}
               decimalScale={2}
-              value={form.qty}
+              value={noDose ? '' : form.qty}
+              placeholder={noDose ? '—' : undefined}
+              disabled={noDose}
               onChange={(v) => onForm({ qty: String(v) })}
             />
             <Select
               {...sel}
               {...af('unit', '단위')}
-              data={UNIT_OPTS}
+              data={route === 'eye' ? EYE_UNIT_OPTS : UNIT_OPTS}
               value={form.unit}
-              disabled={route === 'eye'}
               onChange={(v) => v && onForm({ unit: v as UnitSel })}
             />
           </>
@@ -366,7 +379,7 @@ export default function DosageCard({
           />
         )}
         <NumSelect label="기간" value={form.days} presets={DAY_PRESETS} suffix="일" onChange={(v) => onForm({ days: v })} />
-        {(route === 'oral' || route === 'custom') && prn && (
+        {takeLike && prn && (
           <NumSelect
             {...af('interval', '최소 간격')}
             value={form.interval}

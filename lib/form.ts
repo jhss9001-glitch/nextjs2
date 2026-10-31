@@ -36,10 +36,11 @@ export function makeForm(def: DrugDefaults, general: GeneralKey[], route: Route)
 /** 환자 설명에서 한국어는 있는데 영어 번역이 아직 없는 항목 이름들 */
 export function missingInfo(info: PatientInfo): string[] {
   const pending = (t: Tr) => !!t.ko.trim() && !t.en.trim();
+  const hide = info.hide ?? {}; // 안내문에서 뺀 항목은 번역이 없어도 됨
   const out: string[] = [];
-  if (pending(info.purpose)) out.push('무슨 약인지');
-  if (info.sideEffects.some(pending)) out.push('부작용');
-  if (pending(info.serious)) out.push('병원에 가야 할 때');
+  if (!hide.purpose && pending(info.purpose)) out.push('무슨 약인지');
+  if (!hide.sideEffects && info.sideEffects.some(pending)) out.push('부작용');
+  if (!hide.serious && pending(info.serious)) out.push('병원에 가야 할 때');
   return out;
 }
 
@@ -47,8 +48,12 @@ export function missingInfo(info: PatientInfo): string[] {
 const cleanInfo = (info: PatientInfo): PatientInfo => ({
   purpose: trimTr(info.purpose),
   sideEffects: info.sideEffects.map(trimTr).filter((t) => t.ko || t.en),
-  serious: trimTr(info.serious)
+  serious: trimTr(info.serious),
+  hide: { ...info.hide }
 });
+
+/** 점안은 단위 '방울' 고정 (용량 '선택 안 함'은 그대로) */
+const eyeUnit = (u: FormState['unit']) => (u === 'none' ? 'none' : 'drop');
 
 export const defaultForm = (route: Route): FormState =>
   makeForm({ unit: 'tab', qty: 1, freq: '3', timing: 'after_30', days: '', interval: 4, max: '' }, [], route);
@@ -98,7 +103,7 @@ export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, fo
     customName: custom ? trimTr(customName) : { en: '', ko: '' },
     route,
     qty,
-    unit: route === 'eye' ? 'drop' : form.unit,
+    unit: route === 'eye' ? eyeUnit(form.unit) : form.unit,
     // 주 1회는 복용하는 날 1회로 처리
     freq: cycle === 'weekly' ? '1' : form.freq,
     timing: form.timing,
@@ -123,7 +128,7 @@ export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, fo
 export function itemToForm(it: Item): FormState {
   return {
     route: it.route,
-    unit: it.route === 'eye' ? 'drop' : it.unit,
+    unit: it.route === 'eye' ? eyeUnit(it.unit) : it.unit,
     qty: String(it.qty || 1),
     freq: it.freq,
     timing: it.timing,
@@ -141,7 +146,8 @@ export function itemToForm(it: Item): FormState {
     info: {
       purpose: { ...it.info.purpose },
       sideEffects: it.info.sideEffects.map((s) => ({ ...s })),
-      serious: { ...it.info.serious }
+      serious: { ...it.info.serious },
+      hide: { ...it.info.hide }
     },
     general: it.general,
     notes: it.notes

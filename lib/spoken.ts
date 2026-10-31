@@ -1,4 +1,6 @@
-import { cautions, fmtNum, freqOf, infoOf, itemName, itemTitle, qtyOf, routePhrase, routeVerbKo, timingOf, tx } from '@/lib/sentences';
+import {
+  cautions, enTail, fmtNum, freqOf, infoOf, itemName, itemTitle, koHead, NO_DOSE_EN, qtyOf, routePhrase, routeVerbKo, tidy, timingOf, tx
+} from '@/lib/sentences';
 import type { Item, Lang, ScriptBlock } from '@/lib/types';
 
 /* 구어체 복약지도 스크립트 */
@@ -12,6 +14,7 @@ const lcFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 // 한국어 구어: "한 알", "두 포", "반 알" (직접 입력한 단위는 숫자 그대로)
 function koSpokenQty(it: Item): string {
   const q = it.qty;
+  if (it.unit === 'none') return '';
   if (it.unit === 'custom') return `${fmtNum(q)}${tx(it.texts.unit, 'ko')}`;
   if (it.unit === 'ml') return `${fmtNum(q)}mL`;
   const word = { tab: '알', cap: '캡슐', pkt: '포', drop: '방울' }[it.unit];
@@ -21,7 +24,7 @@ function koSpokenQty(it: Item): string {
 }
 
 function spokenFreq(it: Item, lang: Lang): string {
-  if (lang === 'en' || it.freq === 'custom') return freqOf(it, lang);
+  if (lang === 'en' || it.freq === 'custom' || it.freq === 'none') return freqOf(it, lang);
   const n = Number(it.freq);
   if (it.cycle === 'weekly') return '일주일에 한 번';
   if (it.cycle === 'alt') return n === 1 ? '이틀에 한 번' : `이틀에 한 번, 하루 ${KO_NATIVE[n] || n} 번`;
@@ -29,6 +32,9 @@ function spokenFreq(it: Item, lang: Lang): string {
 }
 
 type Fn<A extends unknown[]> = Record<Lang, (...a: A) => string>;
+
+// 용량 '선택 안 함'이면 "한 번에 …씩"을 빼고 말함
+const doseKo = (q: string) => (q ? `한 번에 ${q}씩` : '');
 
 const SP = {
   open: {
@@ -44,33 +50,33 @@ const SP = {
     en: (i, n, name) => (n === 1 ? `This medicine is ${name}.` : `The ${ORD.en[i] || `number ${i + 1}`} medicine is ${name}.`)
   } as Fn<[number, number, string]>,
   oral: {
-    ko: (f, q, t) => `${f}, 한 번에 ${q}씩 ${t} 드세요.`,
-    en: (f, q, t) => `Please take ${q} ${f}, ${t}.`
+    ko: (f, q, t) => tidy(`${koHead(f, `${doseKo(q)} ${t}`)} 드세요.`),
+    en: (f, q, t) => tidy(`Please take ${q || NO_DOSE_EN} ${enTail(f, t)}.`)
   } as Fn<[string, string, string]>,
   // 직접 입력한 사용 경로: ko는 v = "흡입하세요", en은 v = 용량이 들어간 동사구 ("Inhale 2 puffs")
   custom: {
-    ko: (v, f, q, t) => `${f}, 한 번에 ${q}씩 ${t} ${v}`.replace(/([^.!?。])$/, '$1.'),
-    en: (v, f, _q, t) => `Please ${lcFirst(v)} ${f}, ${t}.`
+    ko: (v, f, q, t) => tidy(`${koHead(f, `${doseKo(q)} ${t}`)} ${v}`).replace(/([^.!?。])$/, '$1.'),
+    en: (v, f, _q, t) => tidy(`Please ${lcFirst(v)} ${enTail(f, t)}.`)
   } as Fn<[string, string, string, string]>,
   customPrn: {
-    ko: (v, q) => `필요할 때만 한 번에 ${q}씩 ${v}`.replace(/([^.!?。])$/, '$1.'),
+    ko: (v, q) => tidy(`필요할 때만 ${doseKo(q)} ${v}`).replace(/([^.!?。])$/, '$1.'),
     en: (v) => `Please ${lcFirst(v)} only when you need to.`
   } as Fn<[string, string]>,
   oralPrn: {
-    ko: (q) => `증상이 있을 때만 한 번에 ${q}씩 드세요.`,
-    en: (q) => `Please take ${q} only when you have symptoms.`
+    ko: (q) => tidy(`증상이 있을 때만 ${doseKo(q)} 드세요.`),
+    en: (q) => `Please take ${q || NO_DOSE_EN} only when you have symptoms.`
   } as Fn<[string]>,
   eye: {
-    ko: (f, q) => `${f}, 한 번에 ${q}씩 눈에 넣어 주세요.`,
-    en: (f, q) => `Please put ${q} in your eye(s) ${f}.`
+    ko: (f, q) => tidy(`${koHead(f, doseKo(q))} 눈에 넣어 주세요.`),
+    en: (f, q) => tidy(`Please put ${q || 'the drops'} in your eye(s) ${f}.`)
   } as Fn<[string, string]>,
   eyePrn: {
-    ko: (q) => `필요할 때 한 번에 ${q}씩 눈에 넣어 주세요.`,
-    en: (q) => `Please put ${q} in your eye(s) whenever you need to.`
+    ko: (q) => tidy(`필요할 때 ${doseKo(q)} 눈에 넣어 주세요.`),
+    en: (q) => `Please put ${q || 'the drops'} in your eye(s) whenever you need to.`
   } as Fn<[string]>,
   topical: {
-    ko: (f) => `${f}, 아픈 부위에 얇게 발라 주세요.`,
-    en: (f) => `Please apply a thin layer to the affected area ${f}.`
+    ko: (f) => tidy(`${f}, 아픈 부위에 얇게 발라 주세요.`),
+    en: (f) => tidy(`Please apply a thin layer to the affected area ${f}.`)
   } as Fn<[string]>,
   topicalPrn: {
     ko: () => '필요할 때 아픈 부위에 얇게 발라 주세요.',
@@ -111,7 +117,7 @@ function spokenDirections(it: Item, lang: Lang): string[] {
   const prn = it.freq === 'prn';
   const q = lang === 'ko' ? koSpokenQty(it) : qtyOf(it, lang);
   const f = prn ? '' : spokenFreq(it, lang);
-  const takeLike = it.route === 'oral' || it.route === 'custom';
+  const takeLike = it.route === 'oral' || it.route === 'custom' || it.route === 'none';
 
   if (it.route === 'oral') {
     if (prn) {

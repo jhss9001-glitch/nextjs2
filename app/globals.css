@@ -179,7 +179,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* 환자 설명 카드 */
 .card-sub { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 4px; }
 .info-body { display: flex; flex-direction: column; gap: 12px; }
-.info-group { display: flex; flex-direction: column; gap: 8px; }
+.info-part { display: flex; flex-direction: column; gap: 6px; }
+.info-part-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.info-part-body { display: flex; flex-direction: column; gap: 8px; }
+/* 안내문에서 뺀 항목: 내용은 남겨 두고 흐리게 */
+.info-part[data-hidden='true'] .info-part-body { opacity: 0.45; }
 
 /* 식약처 용법 자동 입력 상태 */
 .dosage-auto { padding: 10px 14px 0; display: flex; flex-direction: column; gap: 8px; }
@@ -274,7 +278,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .route-oral { background: var(--primary-soft); color: var(--primary-ink); }
 .route-eye { background: var(--eye-soft); color: var(--eye-ink); }
 .route-topical { background: var(--warm-soft); color: var(--warm-ink); }
-.route-custom { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.route-custom, .route-none { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
 .row-btn {
   padding: 3px 8px; margin-left: 4px;
   border: 1px solid var(--border); border-radius: 4px; background: var(--surface);

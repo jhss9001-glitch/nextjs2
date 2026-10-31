@@ -10,10 +10,10 @@ export type GeneralKey =
   | 'stop_rash' | 'consult' | 'shake' | 'fridge' | 'room' | 'child';
 export type UiKey = 'title' | 'pharmacy' | 'purpose' | 'howto' | 'sideEffects' | 'caution' | 'product' | 'footer';
 
-/* 용법 각 항목의 선택값: 목록 값 또는 '직접 입력'(custom) */
-export type RouteSel = Route | 'custom';
-export type UnitSel = UnitKey | 'custom';
-export type TimingSel = TimingKey | 'custom';
+/* 용법 각 항목의 선택값: 목록 값 / '직접 입력'(custom) / '선택 안 함'(none: 문장에서 그 부분을 빼고 자연스럽게 이어 붙임) */
+export type RouteSel = Route | 'custom' | 'none';
+export type UnitSel = UnitKey | 'custom' | 'none';
+export type TimingSel = TimingKey | 'custom' | 'none';
 /** 투여 주기: 매일('') | 격일 | 주 1회 | 직접 입력 */
 export type CycleKey = '' | 'alt' | 'weekly' | 'custom';
 
@@ -40,7 +40,9 @@ export interface PatientInfo {
   purpose: Tr;
   sideEffects: Tr[];
   serious: Tr;
+  hide?: Partial<Record<InfoPart, boolean>>; // 약사가 '안내문에 넣지 않음'으로 끈 항목 (내용은 그대로 보관)
 }
+export type InfoPart = 'purpose' | 'sideEffects' | 'serious';
 export const emptyInfo = (): PatientInfo => ({ purpose: emptyTr(), sideEffects: [], serious: emptyTr() });
 export const emptyTexts = (): CustomTexts => ({
   route: emptyTr(), unit: emptyTr(), freq: emptyTr(), timing: emptyTr(), cycle: emptyTr()
@@ -128,7 +130,7 @@ export interface Item {
   route: RouteSel;
   qty: number;
   unit: UnitSel;
-  freq: string; // '1'~'6' | 'prn' | 'custom'
+  freq: string; // '1'~'6' | 'prn' | 'custom' | 'none'
   timing: TimingSel;
   days: number | null;
   interval: number | null;

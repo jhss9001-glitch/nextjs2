@@ -1,9 +1,37 @@
 'use client';
 
-import { ActionIcon, Button, Loader } from '@mantine/core';
+import { ActionIcon, Button, Loader, Switch } from '@mantine/core';
 import { IconAlertTriangle, IconPlus, IconRefresh, IconSparkles, IconX } from '@tabler/icons-react';
 import KoInput from '@/components/KoInput';
-import { emptyTr, type PatientInfo, type Tr } from '@/lib/types';
+import { emptyTr, type InfoPart, type PatientInfo, type Tr } from '@/lib/types';
+
+/** 항목 제목 + '안내문에 넣기' 스위치. 끄면 내용은 남겨 두고(흐리게) 안내문·스크립트에서만 뺌 */
+function Part({
+  title,
+  hidden,
+  onToggle,
+  children
+}: {
+  title: string;
+  hidden: boolean;
+  onToggle: (hidden: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="info-part" data-hidden={hidden}>
+      <div className="info-part-head">
+        <span className="label">{title}</span>
+        <Switch
+          size="xs"
+          label={hidden ? '안내문에서 뺌' : '안내문에 넣기'}
+          checked={!hidden}
+          onChange={(e) => onToggle(!e.currentTarget.checked)}
+        />
+      </div>
+      <div className="info-part-body">{children}</div>
+    </div>
+  );
+}
 
 export interface InfoState {
   status: 'idle' | 'loading' | 'done' | 'error';
@@ -34,6 +62,8 @@ export default function PatientInfoCard({
   const set = (patch: Partial<PatientInfo>) => onChange({ ...info, ...patch });
   const setSide = (i: number, v: Tr) => set({ sideEffects: info.sideEffects.map((s, k) => (k === i ? v : s)) });
   const removeSide = (i: number) => set({ sideEffects: info.sideEffects.filter((_, k) => k !== i) });
+  const hidden = (p: InfoPart) => !!info.hide?.[p];
+  const toggle = (p: InfoPart) => (h: boolean) => set({ hide: { ...info.hide, [p]: h } });
 
   return (
     <div className="card">
@@ -66,17 +96,18 @@ export default function PatientInfoCard({
       )}
 
       <div className="card-body info-body">
-        <KoInput
-          kind="note"
-          label="무슨 약인가요"
-          placeholder="예: 혈압을 낮춰 주는 약이에요."
-          value={info.purpose}
-          back={backs[info.purpose.en]}
-          onChange={(v) => set({ purpose: v })}
-        />
+        <Part title="무슨 약인가요" hidden={hidden('purpose')} onToggle={toggle('purpose')}>
+          <KoInput
+            kind="note"
+            label=""
+            placeholder="예: 혈압을 낮춰 주는 약이에요."
+            value={info.purpose}
+            back={backs[info.purpose.en]}
+            onChange={(v) => set({ purpose: v })}
+          />
+        </Part>
 
-        <div className="info-group">
-          <div className="label">부작용 (흔하게 나타날 수 있는 것)</div>
+        <Part title="부작용 (흔하게 나타날 수 있는 것)" hidden={hidden('sideEffects')} onToggle={toggle('sideEffects')}>
           {info.sideEffects.map((s, i) => (
             <KoInput
               key={i}
@@ -102,16 +133,18 @@ export default function PatientInfoCard({
           >
             부작용 추가
           </Button>
-        </div>
+        </Part>
 
-        <KoInput
-          kind="note"
-          label="이럴 땐 바로 병원에 (심각한 부작용)"
-          placeholder="예: 숨이 차거나 입술·얼굴이 부으면 바로 병원에 가세요."
-          value={info.serious}
-          back={backs[info.serious.en]}
-          onChange={(v) => set({ serious: v })}
-        />
+        <Part title="이럴 땐 바로 병원에 (심각한 부작용)" hidden={hidden('serious')} onToggle={toggle('serious')}>
+          <KoInput
+            kind="note"
+            label=""
+            placeholder="예: 숨이 차거나 입술·얼굴이 부으면 바로 병원에 가세요."
+            value={info.serious}
+            back={backs[info.serious.en]}
+            onChange={(v) => set({ serious: v })}
+          />
+        </Part>
       </div>
     </div>
   );
