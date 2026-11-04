@@ -507,6 +507,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .board-body { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .board-reply { padding: 12px 14px; background: var(--surface-2); border-radius: 10px; }
 
+/* ---------------- 관리자 ---------------- */
+.admin-signout { margin-left: auto; }
+.admin-signout .board-button { cursor: pointer; font-family: inherit; }
+.admin-page { max-width: 900px; }
+.admin-login { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; margin: 24px auto 0; }
+.admin-form { display: flex; flex-direction: column; gap: 14px; }
+.admin-form-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-form-buttons > * { flex: 1 1 160px; }
+.admin-row-link { color: var(--text); font-weight: 700; text-decoration: none; }
+.admin-row-link:hover { color: var(--primary); text-decoration: underline; }
+.admin-back { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); font-size: 14px; font-weight: 600; text-decoration: none; }
+.admin-report-title { margin: 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.admin-section-title { margin: 0; font-size: 16px; font-weight: 700; }
+.admin-drug { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 10px; margin: 0; padding: 12px 14px; background: var(--auto-bg); border: 1px solid var(--auto-border); border-radius: 10px; }
+.admin-drug dt { color: var(--muted); font-size: 13px; }
+.admin-drug dd { margin: 0; overflow-wrap: anywhere; }
+.admin-events { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.admin-events li { display: flex; flex-direction: column; gap: 2px; }
+.admin-events .board-body { margin: 0; }
+
 /* ---------------- FAQ ---------------- */
 .faq-section { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .faq-section h2 { margin: 0; font-size: 16px; font-weight: 700; }

@@ -51,5 +51,10 @@ export interface LookupState {
   reports?: MyReport[];
 }
 
+export interface AdminFormState {
+  error?: string;
+  notice?: string;
+}
+
 export const formatKst = (d: Date) =>
   d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short' });

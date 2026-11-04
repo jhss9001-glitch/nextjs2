@@ -143,15 +143,17 @@ export async function findMyReports(name: string, password: string): Promise<MyR
   return [...rows];
 }
 
-/** 공개 목록: 본문·약 정보·답변은 조회하지 않음 */
+/** 공개 목록: 본문·약 정보·답변은 조회하지 않고, 관리자가 숨긴 신고는 뺌 */
 export async function listPublicReports(page: number): Promise<{ reports: PublicReport[]; total: number }> {
   const sql = db();
   const reports = await sql<PublicReport[]>`
     select r.id, p.name as nickname, r.category, r.title, r.status, r.created_at as "createdAt"
     from error_board.reports r
     join error_board.reporters p on p.id = r.reporter_id
+    where r.hidden_at is null
     order by r.created_at desc
     limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`;
-  const [{ total }] = await sql<{ total: number }[]>`select count(*)::int as total from error_board.reports`;
+  const [{ total }] = await sql<{ total: number }[]>`
+    select count(*)::int as total from error_board.reports where hidden_at is null`;
   return { reports: [...reports], total };
 }
