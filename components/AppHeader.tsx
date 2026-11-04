@@ -2,6 +2,7 @@
 
 import BrandMark from '@/components/BrandMark';
 import { displayEn, useAutoTranslate } from '@/components/KoInput';
+import SiteNav from '@/components/SiteNav';
 import type { Tr } from '@/lib/types';
 
 export default function AppHeader({
@@ -25,6 +26,7 @@ export default function AppHeader({
             <span>YAKSOK · 영문 복약지도</span>
           </span>
         </div>
+        <SiteNav active="/" />
         <div className="topbar-search">{search}</div>
         <label className="topbar-pharmacy">
           {/* 약국명 첫 글자 (비어 있으면 '약') */}

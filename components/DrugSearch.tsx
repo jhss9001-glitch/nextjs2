@@ -16,10 +16,12 @@ interface MfdsResult {
 /** 식약처 의약품 검색 (제품명) */
 export default function DrugSearch({
   onSelect,
-  inputRef
+  inputRef,
+  emptyText = '검색 결과가 없습니다. 아래 “직접 입력”을 이용하세요.'
 }: {
   onSelect: (d: Drug) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  emptyText?: string;
 }) {
   const [query, setQuery] = useState('');
   const [debounced] = useDebouncedValue(query.trim(), 350);
@@ -99,7 +101,7 @@ export default function DrugSearch({
             <Combobox.Empty className="search-error">검색 실패: {remote.error}</Combobox.Empty>
           )}
           {!loading && remote && !remote.error && !remote.items.length && (
-            <Combobox.Empty>검색 결과가 없습니다. 아래 “직접 입력”을 이용하세요.</Combobox.Empty>
+            <Combobox.Empty>{emptyText}</Combobox.Empty>
           )}
           {!loading && remote && remote.items.length > 0 && (
             <Combobox.Group label={`식약처 검색 결과 · ${remote.items.length}건`}>

@@ -124,6 +124,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .brand-word { display: flex; flex-direction: column; line-height: 1.05; }
 .brand-word strong { font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
 .brand-word span { font-family: var(--font-code); font-size: 10.5px; color: var(--topbar-muted); letter-spacing: .06em; }
+.site-brand { color: inherit; text-decoration: none; }
+.site-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+.site-nav a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px;
+  color: var(--topbar-text); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.site-nav a:not(.site-nav-on):hover { background: var(--topbar-2); }
+.site-nav .site-nav-on { background: var(--primary-soft); color: var(--primary-ink); }
 .topbar-search { flex: 1 1 320px; min-width: 0; }
 .topbar-search .mantine-Input-input {
   background: var(--topbar-2);
@@ -451,6 +459,65 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .search-error { color: var(--danger); }
 .screen-hidden { display: none; }
 
+/* ---------------- 오류 신고 게시판 ---------------- */
+.board-page { display: flex; flex-direction: column; gap: 14px; max-width: 860px; margin: 0 auto; padding: 24px 20px 48px; color: var(--text); }
+.board-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.board-nav a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px;
+  color: var(--text-2); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.board-nav a:not(.board-nav-on):hover { background: var(--surface-2); }
+.board-nav .board-nav-on { background: var(--primary-soft); color: var(--primary-ink); }
+.board-title { margin: 0; font-size: 24px; font-weight: 700; }
+.board-muted { margin: 0; color: var(--muted); font-size: 13px; }
+.board-muted a, .board-pages a { color: var(--primary); font-weight: 600; }
+.board-form {
+  display: flex; flex-direction: column; gap: 14px; padding: 20px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
+}
+.board-field { display: flex; flex-direction: column; gap: 4px; }
+.board-label { font-size: 14px; font-weight: 500; }
+.board-drug {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
+  background: var(--auto-bg); border: 1px solid var(--auto-border); border-radius: 10px;
+}
+.board-list { margin: 0; padding: 0; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
+.board-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+.board-list li:last-child { border-bottom: 0; }
+.board-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.board-row-end { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.board-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.board-button {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.board-button:hover { background: var(--surface-2); }
+.board-button-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.board-button-primary:hover { background: var(--primary-hover); }
+.board-pages { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 44px; }
+.board-pages a:last-child { justify-self: end; }
+.board-status { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.board-status-received { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.board-status-in_progress { background: var(--eye-soft); color: var(--eye-ink); }
+.board-status-resolved { background: var(--primary-soft); color: var(--primary-ink); }
+.board-status-declined { background: var(--warm-soft); color: var(--warm-ink); }
+.board-card { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.board-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.board-card-head h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.board-body { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.board-reply { padding: 12px 14px; background: var(--surface-2); border-radius: 10px; }
+
+/* ---------------- FAQ ---------------- */
+.faq-section { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.faq-section h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.faq-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
+.faq-list details { border-bottom: 1px solid var(--border-soft); }
+.faq-list details:last-child { border-bottom: 0; }
+.faq-list summary { display: flex; align-items: center; min-height: 48px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+.faq-list summary:hover { background: var(--surface-2); }
+.faq-list p { margin: 0; padding: 2px 16px 16px; color: var(--text-2); }
+.faq-list a { color: var(--primary); font-weight: 600; }
+
 /* ---------------- 반응형 ---------------- */
 @media (max-width: 1100px) {
   .col-output { position: static; }
@@ -460,6 +527,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .step { padding: 8px 12px; }
 }
 @media (max-width: 640px) {
+  .board-list li { flex-direction: column; align-items: flex-start; }
+  .board-row-end { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; text-align: left; }
   .workspace { padding: 12px; }
   .steps-wrap { padding: 12px 12px 0; }
   .dose-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
