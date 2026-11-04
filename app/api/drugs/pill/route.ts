@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getPill } from '@/lib/mfds';
 
 export const maxDuration = 60;
-export const preferredRegion = 'icn1'; // 식약처 API와 가까운 서울 리전
 
 /** GET /api/drugs/pill?itemSeq=202200407 — 낱알식별 사진·모양 ({ pill: null }이면 낱알 정보 없는 품목) */
 export async function GET(req: NextRequest) {

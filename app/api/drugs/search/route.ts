@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { searchMfds } from '@/lib/mfds';
 
 export const maxDuration = 60;
-export const preferredRegion = 'icn1'; // 식약처 API와 가까운 서울 리전
 
 /** GET /api/drugs/search?q=타이레놀 — 식약처 검색 프록시 (인증키는 서버에만 보관) */
 export async function GET(req: NextRequest) {
