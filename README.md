@@ -9,7 +9,7 @@
 ```
 MFDS_API_KEY=공공데이터포털_일반인증키
 GEMINI_API_KEY=Google_AI_Studio_API_키
-# GEMINI_MODEL=gemini-3.5-flash-lite   (선택, 기본값)
+# GEMINI_MODEL=gemini-3.1-flash-lite   (선택, 기본값)
 ```
 
 - `GEMINI_API_KEY`: 약사가 한국어로 직접 입력한 문구(경로·단위·횟수·시점·주기·주의사항·약 이름·약국명)를 영어로 번역합니다. 번역 후 원문을 보지 않은 별도 호출로 역번역해 뜻을 확인할 수 있게 보여줍니다. 브라우저는 `/api/translate`만 호출합니다.

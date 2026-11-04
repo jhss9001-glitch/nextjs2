@@ -13,8 +13,8 @@ export interface TranslateResult {
 }
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
-// 짧은 문구 번역이라 가볍고 빠른 모델로 충분 (실측 건당 약 1초). GEMINI_MODEL로 변경 가능
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+// 짧은 문구 번역이라 가벼운 모델로 충분. 응답 속도는 시간대에 따라 크게 달라짐. GEMINI_MODEL로 변경 가능
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
 
 const SYSTEM = `You are a translator for a Korean community pharmacy.
 A Korean pharmacist types short instructions in Korean; you turn them into plain, patient-friendly English
