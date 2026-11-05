@@ -1,6 +1,7 @@
 import {
   emptyInfo,
   emptyTexts,
+  emptyTr,
   type DosageCandidate,
   type PatientInfo,
   type Drug,
@@ -11,6 +12,9 @@ import {
   type Route,
   type Tr
 } from '@/lib/types';
+
+/** mg 단위의 최소 용량 (정·캡슐과 달리 0.5보다 작을 수 있음) */
+export const MG_MIN = 0.01;
 
 /** 기본값 적용 (점안은 단위 '방울' 고정) */
 export function makeForm(def: DrugDefaults, general: GeneralKey[], route: Route): FormState {
@@ -63,8 +67,10 @@ export const defaultForm = (route: Route): FormState =>
 export function applyCandidate(form: FormState, c: DosageCandidate): FormState {
   const d = c.def;
   const next = { ...form, texts: { ...form.texts } };
+  if (d.insertAt && (form.route === 'anal' || form.route === 'rectal')) next.route = d.insertAt;
   if (d.freq) next.freq = d.freq;
-  if (d.qty) next.qty = String(d.qty);
+  // 단위 없는 용량은 함량으로 계산한 정 수이므로 mg 칸에 넣지 않음 (2정 → "2 mg" 방지)
+  if (d.qty && (d.unit || form.unit !== 'mg')) next.qty = String(d.qty);
   if (d.unit && form.route !== 'eye') next.unit = d.unit;
   if (d.timing) {
     next.timing = d.timing;
@@ -87,6 +93,7 @@ export function missingCustom(form: FormState): string[] {
   if (form.freq === 'custom' && form.cycle !== 'weekly' && !t.freq.en.trim()) out.push('1일 횟수');
   if (!prn && form.route !== 'eye' && form.route !== 'topical' && form.timing === 'custom' && !t.timing.en.trim()) out.push('복용 시점');
   if (!prn && form.cycle === 'custom' && !t.cycle.en.trim()) out.push('투여 주기');
+  if (form.days === 'custom' && !t.days.en.trim()) out.push('기간');
   return out;
 }
 
@@ -95,7 +102,8 @@ const trimTr = (tr: { en: string; ko: string }) => ({ en: tr.en.trim(), ko: tr.k
 /** 현재 입력값 → 항목 */
 export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, form: FormState): Item {
   const route = form.route;
-  const qty = Math.max(0.5, Number(form.qty) || 1);
+  const qty = Math.max(form.unit === 'mg' ? MG_MIN : 0.5, Number(form.qty) || 1);
+  const customDays = form.days === 'custom';
   const prn = form.freq === 'prn';
   const cycle = prn ? '' : form.cycle;
   const t = form.texts;
@@ -108,7 +116,7 @@ export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, fo
     // 주 1회는 복용하는 날 1회로 처리
     freq: cycle === 'weekly' ? '1' : form.freq,
     timing: form.timing,
-    days: form.days ? Number(form.days) : null,
+    days: form.days && !customDays ? Number(form.days) : null,
     interval: form.interval ? Number(form.interval) : null,
     max: form.maxDaily ? Number(form.maxDaily) : null,
     cycle,
@@ -117,7 +125,8 @@ export function buildItem(drug: Drug | null, custom: boolean, customName: Tr, fo
       unit: trimTr(t.unit),
       freq: trimTr(t.freq),
       timing: trimTr(t.timing),
-      cycle: trimTr(t.cycle)
+      cycle: trimTr(t.cycle),
+      days: customDays ? trimTr(t.days) : emptyTr() // 목록에서 일수를 고르면 입력해 둔 문구는 쓰지 않음
     },
     info: cleanInfo(form.info),
     general: form.general,
@@ -134,7 +143,7 @@ export function itemToForm(it: Item): FormState {
     qty: String(it.qty || 1),
     freq: it.freq,
     timing: it.timing,
-    days: String(it.days ?? ''),
+    days: it.texts.days.ko ? 'custom' : String(it.days ?? ''),
     interval: String(it.interval ?? ''),
     maxDaily: String(it.max ?? ''),
     cycle: it.cycle,
@@ -143,7 +152,8 @@ export function itemToForm(it: Item): FormState {
       unit: { ...it.texts.unit },
       freq: { ...it.texts.freq },
       timing: { ...it.texts.timing },
-      cycle: { ...it.texts.cycle }
+      cycle: { ...it.texts.cycle },
+      days: { ...it.texts.days }
     },
     info: {
       purpose: { ...it.info.purpose },

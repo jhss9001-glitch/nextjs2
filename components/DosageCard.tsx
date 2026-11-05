@@ -6,6 +6,7 @@ import { useState } from 'react';
 import KoInput, { type TranslateKind } from '@/components/KoInput';
 import { GENERAL, TIMINGS, UNITS } from '@/data/rx-data';
 import { useFavorites } from '@/hooks/useFavorites';
+import { MG_MIN } from '@/lib/form';
 import { directions, joinDir } from '@/lib/sentences';
 import type {
   CustomTexts,
@@ -22,7 +23,9 @@ import type {
   UnitSel
 } from '@/lib/types';
 
-export const ROUTE_LABEL: Record<Exclude<RouteSel, 'custom' | 'none'>, string> = { oral: '내복', eye: '점안', topical: '외용' };
+export const ROUTE_LABEL: Record<Exclude<RouteSel, 'custom' | 'none'>, string> = {
+  oral: '내복', eye: '점안', topical: '외용', anal: '항문 삽입', rectal: '직장 삽입', vaginal: '질 삽입', enema: '직장 주입'
+};
 /** 목록 표시용 경로 이름 (직접 입력이면 입력한 한국어 → 영어) */
 export const routeLabel = (it: Pick<Item, 'route' | 'texts'>) =>
   it.route === 'none'
@@ -37,7 +40,9 @@ const NONE = '선택 안 함';
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
 const opt = (value: string | number, label: string) => ({ value: String(value), label });
 const ROUTES = [
-  opt('oral', '내복 (먹는 약)'), opt('eye', '점안 (안약)'), opt('topical', '외용 (바르는 약)'), opt('none', `${NONE} (“사용하세요”)`), opt('custom', CUSTOM)
+  opt('oral', '내복 (먹는 약)'), opt('eye', '점안 (안약)'), opt('topical', '외용 (바르는 약)'),
+  opt('anal', '항문 삽입 (좌제)'), opt('rectal', '직장 내 삽입 (좌제)'), opt('vaginal', '질 내 삽입 (질정·질좌제)'), opt('enema', '직장 내 주입 (관장약)'),
+  opt('none', `${NONE} (“사용하세요”)`), opt('custom', CUSTOM)
 ];
 const UNIT_OPTS = [...Object.entries(UNITS).map(([k, u]) => opt(k, u.label)), opt('none', `${NONE} (용량 빼기)`), opt('custom', CUSTOM)];
 const EYE_UNIT_OPTS = [opt('drop', UNITS.drop.label), opt('none', `${NONE} (용량 빼기)`)];
@@ -45,7 +50,7 @@ const FREQS = [...[1, 2, 3, 4, 5, 6].map((n) => opt(n, `${n}회`)), opt('prn', '
 const TIMING_OPTS = [...Object.entries(TIMINGS).map(([k, t]) => opt(k, t.label)), opt('none', NONE), opt('custom', CUSTOM)];
 const CYCLE_LABEL: Record<CycleKey, string> = { '': '매일', alt: '격일', weekly: '주 1회', none: NONE, custom: CUSTOM };
 const CYCLES = (Object.keys(CYCLE_LABEL) as CycleKey[]).map((c) => opt(c, CYCLE_LABEL[c]));
-const DAY_PRESETS = [1, 2, 3, 4, 5, 6, 7, 10, 14, 28, 30, 60, 90];
+const DAY_OPTS = [opt('', NONE), ...[1, 2, 3, 4, 5, 6, 7, 10, 14, 28, 30, 60, 90].map((n) => opt(n, `${n}일`)), opt('custom', CUSTOM)];
 const INTERVAL_PRESETS = [4, 6, 8, 12];
 const MAX_PRESETS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -205,7 +210,7 @@ export default function DosageCard({
   const route = form.route;
   const prn = form.freq === 'prn';
   const auto = !!drug && form.route === drug.route;
-  const takeLike = route === 'oral' || route === 'custom' || route === 'none'; // 복용 시점·최소 간격을 묻는 경로
+  const takeLike = route !== 'eye' && route !== 'topical'; // 복용 시점·최소 간격을 묻는 경로
   const showTiming = takeLike && !prn;
   const noDose = form.unit === 'none';
   // 식약처 정보로 자동 입력된 칸: 연한 초록 + 라벨에 "· 자동"
@@ -325,7 +330,7 @@ export default function DosageCard({
           <>
             <NumberInput
               {...af('qty', '1회 용량')}
-              min={0.5}
+              min={form.unit === 'mg' ? MG_MIN : 0.5}
               step={0.5}
               decimalScale={2}
               value={noDose ? '' : form.qty}
@@ -377,7 +382,7 @@ export default function DosageCard({
             onChange={(v) => v && onForm({ timing: v as TimingSel })}
           />
         )}
-        <NumSelect label="기간" value={form.days} presets={DAY_PRESETS} suffix="일" onChange={(v) => onForm({ days: v })} />
+        <Select {...sel} label="기간" data={DAY_OPTS} value={form.days} onChange={(v) => onForm({ days: v ?? '' })} />
         {takeLike && prn && (
           <NumSelect
             {...af('interval', '최소 간격')}
@@ -411,6 +416,9 @@ export default function DosageCard({
             onChange={setText('cycle')}
             placeholder="예: 평일에만 복용하고 주말에는 쉬세요."
           />
+        )}
+        {form.days === 'custom' && (
+          <CustomKo kind="days" title="기간" value={form.texts.days} onChange={setText('days')} placeholder="예: 2~3주 / 증상이 나을 때까지" />
         )}
       </div>
 

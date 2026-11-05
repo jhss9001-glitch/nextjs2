@@ -21,6 +21,7 @@ import { buildScript } from '@/lib/spoken';
 import { store } from '@/lib/storage';
 import {
   emptyTr,
+  isInsertRoute,
   type DosageCandidate,
   type DosageState,
   type Drug,
@@ -97,7 +98,20 @@ export default function RxApp() {
   };
 
   // 사용 경로: 약 선택 시 자동, 이후 사용자가 변경 가능 (점안은 단위 '방울' 고정)
-  const changeRoute = (r: RouteSel) => patchForm(r === 'eye' ? { route: r, unit: 'drop' } : { route: r });
+  const changeRoute = (r: RouteSel) => {
+    if (r === 'eye') return patchForm({ route: r, unit: 'drop' });
+    if (isInsertRoute(r)) {
+      // 좌제·관장 단위로 바꾸고, 먹는 약 기본값 "식후 30분"은 뺌. mg·직접 입력한 단위와 질 삽입의 정·캡슐은 유지
+      const keepUnit = form.unit === 'mg' || form.unit === 'custom' || form.unit === 'none' || (r === 'vaginal' && (form.unit === 'tab' || form.unit === 'cap'));
+      return patchForm({
+        route: r,
+        ...(keepUnit ? {} : { unit: r === 'enema' ? 'enema' as const : 'supp' as const }),
+        ...(form.timing === 'after_30' ? { timing: 'none' as const } : {})
+      });
+    }
+    // 넣는 약 전용 단위는 다른 경로에서 쓰지 않음
+    patchForm(form.unit === 'supp' || form.unit === 'enema' ? { route: r, unit: 'tab' } : { route: r });
+  };
 
   const resetInfo = () => {
     infoReq.current++;
@@ -152,6 +166,9 @@ export default function RxApp() {
   /** 후보 i를 폼에 적용 */
   const applyDosage = (c: DosageCandidate, i: number, base?: FormState) => {
     setForm((f) => applyCandidate(base ?? f, c));
+    // 원문의 삽입 부위를 자동값으로 삼아 "경로 수동 변경"으로 표시되지 않게 함
+    const insertAt = c.def.insertAt;
+    if (insertAt) setDrug((cur) => (cur && (cur.route === 'anal' || cur.route === 'rectal') ? { ...cur, route: insertAt } : cur));
     setAutoFields(['route', ...c.fields]);
     setDosage((s) => ({ ...s, selected: i }));
   };

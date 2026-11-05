@@ -5,7 +5,7 @@
  *  - 역번역(back)을 함께 받아 약사가 한국어로 뜻을 확인할 수 있게 함 (Cloud Translation, 실패·단위는 Gemini)
  * ========================================================= */
 
-export type TranslateKind = 'route' | 'unit' | 'freq' | 'timing' | 'cycle' | 'note' | 'name' | 'pharmacy';
+export type TranslateKind = 'route' | 'unit' | 'freq' | 'timing' | 'cycle' | 'days' | 'note' | 'name' | 'pharmacy';
 
 export interface TranslateResult {
   en: string; // unit은 "단수|복수", route는 "{dose}" 자리표시 포함
@@ -55,6 +55,10 @@ const KIND_PROMPT: Record<TranslateKind, string> = {
     'When to use the medicine. It completes "Take 1 tablet once a day, ___." — return only that phrase without a period, ' +
     'e.g. "after brushing your teeth", "1 hour before breakfast".',
   cycle: 'A schedule instruction. Return one or two complete English sentences ending with a period.',
+  days:
+    'How long to use the medicine. It completes "Take 1 tablet 3 times a day, ___." — return only that phrase without a period, ' +
+    'e.g. "for 5 days", "for 2 to 3 weeks", "until your symptoms improve". Keep a range as a range. ' +
+    'If the Korean is not about how long, return an empty string.',
   note:
     'A caution or advice for the patient. Return one or two complete English sentences ending with a period. ' +
     'Short noun-form instructions such as "냉장 보관", "음주 금지", "운전 주의", "식후 복용" are complete. ' +
@@ -83,7 +87,7 @@ function apiKey(): string {
 /** 결과 정리: 따옴표·줄바꿈 제거, 항목별 형식 보정 */
 function normalize(kind: TranslateKind, en: string): string {
   let s = en.replace(/\s+/g, ' ').replace(/^["'“”]+|["'“”]+$/g, '').trim();
-  if (kind === 'timing' || kind === 'freq') s = s.replace(/[.。]$/, '');
+  if (kind === 'timing' || kind === 'freq' || kind === 'days') s = s.replace(/[.。]$/, '');
   if (kind === 'unit' && !s.includes('|')) s = `${s}|${s}`;
   if (kind === 'route' && !s.includes('{dose}')) s = `${s} {dose}`;
   return s;

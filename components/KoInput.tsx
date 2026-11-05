@@ -5,7 +5,7 @@ import { IconArrowBackUp, IconLanguage, IconPencil, IconRefresh } from '@tabler/
 import { useEffect, useRef, useState } from 'react';
 import type { Tr } from '@/lib/types';
 
-export type TranslateKind = 'route' | 'unit' | 'freq' | 'timing' | 'cycle' | 'note' | 'name' | 'pharmacy';
+export type TranslateKind = 'route' | 'unit' | 'freq' | 'timing' | 'cycle' | 'days' | 'note' | 'name' | 'pharmacy';
 
 interface TState {
   ko: string; // 이 상태가 어떤 한국어에 대한 것인지

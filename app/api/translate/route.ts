@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { QuotaError, backTranslate, translateKo, type TranslateKind } from '@/lib/translate';
 
-const KINDS: TranslateKind[] = ['route', 'unit', 'freq', 'timing', 'cycle', 'note', 'name', 'pharmacy'];
+const KINDS: TranslateKind[] = ['route', 'unit', 'freq', 'timing', 'cycle', 'days', 'note', 'name', 'pharmacy'];
 
 /** POST /api/translate { kind, ko } → { en, back } — 한국어 직접 입력을 영어로 (키는 서버에만) */
 export async function POST(req: NextRequest) {

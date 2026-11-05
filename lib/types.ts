@@ -1,7 +1,8 @@
 export type Lang = 'ko' | 'en';
-export type Route = 'oral' | 'eye' | 'topical';
+export type InsertRoute = 'anal' | 'rectal' | 'vaginal' | 'enema';
+export type Route = 'oral' | 'eye' | 'topical' | InsertRoute;
 
-export type UnitKey = 'tab' | 'cap' | 'pkt' | 'ml' | 'drop';
+export type UnitKey = 'tab' | 'cap' | 'pkt' | 'ml' | 'mg' | 'drop' | 'supp' | 'enema';
 export type TimingKey =
   | 'after_30' | 'after_now' | 'after_2h' | 'with_meal' | 'before_30' | 'before_1h'
   | 'bedtime' | 'after_bed' | 'empty' | 'q6h' | 'q8h' | 'q12h' | 'same_time';
@@ -12,6 +13,8 @@ export type UiKey = 'title' | 'pharmacy' | 'purpose' | 'howto' | 'sideEffects' |
 
 /* 용법 각 항목의 선택값: 목록 값 / '직접 입력'(custom) / '선택 안 함'(none: 문장에서 그 부분을 빼고 자연스럽게 이어 붙임) */
 export type RouteSel = Route | 'custom' | 'none';
+/** 항문·직장·질에 넣는 경로 (좌제·질정·관장약) */
+export const isInsertRoute = (r: RouteSel): r is InsertRoute => r === 'anal' || r === 'rectal' || r === 'vaginal' || r === 'enema';
 export type UnitSel = UnitKey | 'custom' | 'none';
 export type TimingSel = TimingKey | 'custom' | 'none';
 /** 투여 주기: 매일('') | 격일 | 주 1회 | 선택 안 함 | 직접 입력 (매일·선택 안 함은 문장에 주기를 따로 쓰지 않음) */
@@ -27,6 +30,7 @@ export interface CustomTexts {
   freq: Tr; // ko "1일 3~4회" → en "3 to 4 times a day"
   timing: Tr; // ko "양치 후에" → en "after brushing your teeth"
   cycle: Tr; // 투여 주기 문장 (독립된 한 문장)
+  days: Tr; // ko "2~3주" → en "for 2 to 3 weeks"
 }
 
 export const emptyTr = (): Tr => ({ en: '', ko: '' });
@@ -46,7 +50,7 @@ export interface PatientInfo {
 export type InfoPart = 'purpose' | 'sideEffects' | 'serious';
 export const emptyInfo = (): PatientInfo => ({ purpose: emptyTr(), sideEffects: [], serious: emptyTr() });
 export const emptyTexts = (): CustomTexts => ({
-  route: emptyTr(), unit: emptyTr(), freq: emptyTr(), timing: emptyTr(), cycle: emptyTr()
+  route: emptyTr(), unit: emptyTr(), freq: emptyTr(), timing: emptyTr(), cycle: emptyTr(), days: emptyTr()
 });
 
 export interface Unit {
@@ -73,6 +77,7 @@ export interface DrugDefaults {
   interval?: number | string | null;
   max?: number | string | null;
   cycle?: CycleKey;
+  insertAt?: 'anal' | 'rectal'; // 좌제 원문에 적힌 삽입 부위 ("항문에 삽입", "직장내 삽입")
 }
 
 /** 식약처 용법 자동 입력 상태 */
@@ -164,7 +169,7 @@ export interface FormState {
   unit: UnitSel;
   freq: string;
   timing: TimingSel;
-  days: string;
+  days: string; // '' | 일수 | 'custom' (texts.days에 직접 입력)
   interval: string;
   maxDaily: string;
   cycle: CycleKey;

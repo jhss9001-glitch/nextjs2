@@ -15,7 +15,10 @@ export const UNITS: Record<UnitKey, Unit> = {
   cap:  { label: '캡슐', ko: '캡슐', en: ['capsule', 'capsules'] },
   pkt:  { label: '포',   ko: '포',   en: ['packet', 'packets'] },
   ml:   { label: 'mL',   ko: 'mL',   en: ['mL', 'mL'] },
-  drop: { label: '방울', ko: '방울', en: ['drop', 'drops'] }
+  mg:   { label: 'mg',   ko: 'mg',   en: ['mg', 'mg'] },
+  drop: { label: '방울', ko: '방울', en: ['drop', 'drops'] },
+  supp: { label: '좌제', ko: '개',   en: ['suppository', 'suppositories'] },
+  enema: { label: '관장약', ko: '개', en: ['enema', 'enemas'] }
 };
 
 /* 복용 시점 (ko는 조사를 포함, en1은 1일 1회일 때 사용) */

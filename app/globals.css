@@ -342,7 +342,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .route-oral { background: var(--primary-soft); color: var(--primary-ink); }
 .route-eye { background: var(--eye-soft); color: var(--eye-ink); }
 .route-topical { background: var(--warm-soft); color: var(--warm-ink); }
-.route-custom, .route-none { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.route-custom, .route-none, .route-anal, .route-rectal, .route-vaginal, .route-enema { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
 .row-btn {
   padding: 3px 8px; margin-left: 4px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface);

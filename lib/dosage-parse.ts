@@ -92,7 +92,11 @@ const UNIT_WORD: [RegExp, UnitKey][] = [
   [/m[lL]|밀리리터/, 'ml'],
   [/방울/, 'drop']
 ];
-const unitOf = (w: string): UnitKey | undefined => UNIT_WORD.find(([re]) => re.test(w))?.[1];
+const unitOf = (w: string, name = ''): UnitKey | undefined => {
+  // "1개"는 제형을 말하지 않으므로 제품명으로 판단
+  if (w === '개') return /좌[제약]/.test(name) ? 'supp' : /관장/.test(name) ? 'enema' : undefined;
+  return UNIT_WORD.find(([re]) => re.test(w))?.[1];
+};
 
 // 식사와 무관: "식사와 관계없이", "식사와 상관없이", "음식과 함께 또는 무관하게", "음식물 섭취와 관계없이" 등
 const FOOD_FREE =
@@ -121,7 +125,8 @@ function timingOf(s: string, freq: number | null): TimingGuess | undefined {
   if (FOOD_FREE.test(s)) return freq === 1 ? k('same_time') : FOOD_ANY;
   if (/매일\s*같은\s*시간|일정한\s*시간/.test(s)) return k('same_time');
   if (/식후\s*및\s*취침\s*전|매\s*식후\s*및\s*취침/.test(s)) return k('after_bed');
-  if (/취침\s*전|자기\s*전|잠자리에\s*들기\s*전/.test(s)) return k('bedtime');
+  if (/취침\s*(?:전|시)|자기\s*전|잠자리에\s*들기\s*전/.test(s)) return k('bedtime');
+  if (/배변\s*후/.test(s)) return c('after a bowel movement', '배변 후에');
   if (/아침\s*식사?\s*후|아침\s*식후/.test(s)) return c('after breakfast', '아침 식사 후에');
   // "식전 30분", "음식물 … 섭취 최소한 30분 전" (비스포스포네이트 등)
   if (/식전\s*30\s*분|식사\s*30\s*분\s*전|(?:음식물?|식사)[^.。\n]{0,30}?30\s*분\s*전/.test(s)) return k('before_30');
@@ -136,6 +141,7 @@ function timingOf(s: string, freq: number | null): TimingGuess | undefined {
   if (h) return h;
   // "1일 2회(아침, 저녁)"의 아침은 시점이 아니라 나눠 먹는 때이므로 1일 1회일 때만
   if (freq === 1 && /아침/.test(s)) return c('in the morning', '아침에');
+  if (freq === 1 && /저녁/.test(s)) return c('in the evening', '저녁에');
   return undefined;
 }
 
@@ -171,12 +177,13 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
   const freqLo = fm ? Number(fm[1]) : /(?:1일|하루)\s*1\s*(?:정|캡슐|포)\s*씩?(?!\d)/.test(s) ? 1 : null;
   const freqHi = fm?.[2] ? Number(fm[2]) : freqLo;
 
-  // 1회 N정 / (200 mg 필름코팅정 2정) / 2정씩 / 1회 1병(30 mL)
+  // 1회 N정 / (200 mg 필름코팅정 2정) / 2정씩 / 1회 1병(30 mL) / 좌제 1개(500mg)를
   const qm =
-    s.match(new RegExp(`1회\\s*(\\d+(?:\\.\\d+)?)\\s*(?:${RANGE}\\s*\\d+(?:\\.\\d+)?\\s*)?(정|캡슐|포|m[lL]|방울)`)) ??
+    s.match(new RegExp(`1회\\s*(\\d+(?:\\.\\d+)?)\\s*(?:${RANGE}\\s*\\d+(?:\\.\\d+)?\\s*)?(정|캡슐|포|m[lL]|방울|개)`)) ??
     s.match(/(\d+(?:\.\d+)?)\s*(정|캡슐|포|방울)\s*\)/) ??
     s.match(/(\d+(?:\.\d+)?)\s*(정|캡슐|포|방울)\s*(?:씩|을|를)/) ??
-    s.match(/1회\s*\d+\s*병\s*\(\s*(\d+(?:\.\d+)?)\s*(m[lL])\s*\)/);
+    s.match(/1회\s*\d+\s*병\s*\(\s*(\d+(?:\.\d+)?)\s*(m[lL])\s*\)/) ??
+    s.match(/(\d+(?:\.\d+)?)\s*(개)\s*(?:\(|씩|을|를)/);
   const halfTab = /1회\s*(?:1\/2|반)\s*정/.test(s);
 
   // mg 용량만 있으면 제품 함량으로 정 수 계산: 1일 1회 400 mg ÷ 200 mg = 2정
@@ -221,7 +228,7 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
     def.qty = 0.5; def.unit = 'tab'; fields.push('qty', 'unit');
   } else if (qm) {
     const q = Number(qm[1]);
-    const u = unitOf(qm[2]);
+    const u = unitOf(qm[2], hints.itemName);
     if (q > 0 && q <= (u === 'ml' ? 100 : 20)) { def.qty = q; fields.push('qty'); }
     if (u) { def.unit = u; fields.push('unit'); }
   } else if (mgQty) {
@@ -229,6 +236,10 @@ function parseSentence(s: string, whole: string, hints: ParseHints): DosageCandi
   }
 
   if (cycle && !prn) { def.cycle = cycle; fields.push('cycle'); }
+
+  // 좌제 삽입 부위: 원문이 분류로 추정한 부위보다 정확함
+  const place = s.match(/(항문|직장)[^.。\n]{0,8}?(?:삽입|투여)/)?.[1];
+  if (place) def.insertAt = place === '항문' ? 'anal' : 'rectal';
 
   // 복용 시점: 이 문장 → 문서 전체(확실한 표현만) → 항암·호르몬제 1일 1회면 매일 같은 시간
   const once = freqLo === 1 || cycle === 'weekly';

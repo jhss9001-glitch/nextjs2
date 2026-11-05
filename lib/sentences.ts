@@ -1,5 +1,5 @@
 import { GENERAL, TIMINGS, UNITS } from '@/data/rx-data';
-import { isDaily, type Item, type Lang, type TimingKey, type Tr, type UnitKey } from '@/lib/types';
+import { isDaily, isInsertRoute, type InsertRoute, type Item, type Lang, type TimingKey, type Tr, type UnitKey } from '@/lib/types';
 
 export const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : String(+n.toFixed(2)));
 
@@ -24,8 +24,17 @@ export const NO_DOSE_EN = 'this medicine';
 const doseKo = (q: string) => (q ? `1회 ${q}씩` : '');
 
 /** 영어 뒷부분: 있는 것만 쉼표로 — "3 times a day, after meals, for 5 days" / 횟수 없으면 "after meals, for 5 days" */
-export const enTail = (f: string, t: string, d?: number | null) =>
-  [f, t, d ? `for ${d} ${d > 1 ? 'days' : 'day'}` : ''].filter(Boolean).join(', ');
+export const enTail = (f: string, t: string, d = '') => [f, t, d].filter(Boolean).join(', ');
+
+/** 기간 표현: 목록 값 "5일간" / "for 5 days", 직접 입력 "2~3주간" / "for 2 to 3 weeks" (없으면 빈 문자열) */
+export function durationOf(it: Item, lang: Lang): string {
+  if (it.texts.days.ko) {
+    const t = tx(it.texts.days, lang).replace(/[.。]$/, '');
+    return lang === 'ko' ? t.replace(/(\d\s*(?:일|주|주일|개월|달|년))$/, '$1간') : t;
+  }
+  if (!it.days) return '';
+  return lang === 'ko' ? `${it.days}일간` : `for ${it.days} ${it.days > 1 ? 'days' : 'day'}`;
+}
 /** 한국어 앞부분: 횟수 뒤에 이어지는 말이 있을 때만 쉼표 — "1일 3회, 1회 1정씩" / "1일 3회 사용하세요" */
 export const koHead = (f: string, rest: string) => (f && rest.trim() ? `${f}, ${rest}` : `${f} ${rest}`);
 
@@ -48,11 +57,19 @@ export function qtyOf(it: Item, lang: Lang): string {
   return `${n} ${it.qty <= 1 ? sg : pl}`;
 }
 
-/** 직접 입력한 사용 경로 + 용량: "Insert {dose} into the vagina" → "Insert 1 tablet into the vagina" */
+/** 항문·직장·질에 넣는 경로의 문구 ({dose} 자리에 용량) */
+const INSERT_TEXT: Record<InsertRoute, Tr> = {
+  anal: { ko: '항문에 삽입하세요', en: 'Insert {dose} into the anus' },
+  rectal: { ko: '직장 내에 삽입하세요', en: 'Insert {dose} into the rectum' },
+  vaginal: { ko: '질 내에 삽입하세요', en: 'Insert {dose} into the vagina' },
+  enema: { ko: '직장 내에 주입하세요', en: 'Use {dose} in the rectum' }
+};
+
+/** 넣는 경로·직접 입력한 사용 경로 + 용량: "Insert {dose} into the vagina" → "Insert 1 tablet into the vagina" */
 export const routePhrase = (it: Item, q: string) => {
   if (it.route === 'none') return `Use ${q || NO_DOSE_EN}`; // 경로 선택 안 함 → 일반적인 "사용하세요"
   q = q || NO_DOSE_EN;
-  const v = tx(it.texts.route, 'en');
+  const v = isInsertRoute(it.route) ? INSERT_TEXT[it.route].en : tx(it.texts.route, 'en');
   return v.includes('{dose}') ? v.replace('{dose}', q) : `${v} ${q}`;
 };
 
@@ -94,17 +111,18 @@ export function timingOf(it: Item, lang: Lang): string {
   return timingText(it.timing, n, lang, it.cycle);
 }
 
-/** 직접 입력한 사용 경로의 한국어 동사: "흡입하세요" (비면 "사용하세요") */
-export const routeVerbKo = (it: Item) => (it.route === 'custom' && it.texts.route.ko.trim()) || '사용하세요';
+/** 넣는 경로·직접 입력한 사용 경로의 한국어 동사: "흡입하세요" (비면 "사용하세요") */
+export const routeVerbKo = (it: Item) =>
+  isInsertRoute(it.route) ? INSERT_TEXT[it.route].ko : (it.route === 'custom' && it.texts.route.ko.trim()) || '사용하세요';
 
 type Fn<A extends unknown[]> = Record<Lang, (...a: A) => string>;
 
 // 횟수(f)·용량(q)·시점(t)은 '선택 안 함'이면 빈 문자열 → tidy로 문장 정리
 const S = {
   oral: {
-    ko: (f, q, t, d) => tidy(`${koHead(f, `${doseKo(q)} ${t} ${d ? `${d}일간` : ''}`)} 복용하세요.`),
+    ko: (f, q, t, d) => tidy(`${koHead(f, `${doseKo(q)} ${t} ${d}`)} 복용하세요.`),
     en: (f, q, t, d) => tidy(`Take ${q || NO_DOSE_EN} ${enTail(f, t, d)}.`)
-  } as Fn<[string, string, string, number | null]>,
+  } as Fn<[string, string, string, string]>,
   oralPrn: {
     ko: (q) => tidy(`증상이 있을 때 ${doseKo(q)} 복용하세요.`),
     en: (q) => `Take ${q || NO_DOSE_EN} when needed (when you have symptoms).`
@@ -127,17 +145,17 @@ const S = {
   } as Fn<[]>,
   // 직접 입력한 사용 경로: ko는 v = "흡입하세요", en은 v = 용량이 들어간 동사구 ("Inhale 2 puffs")
   custom: {
-    ko: (v, f, q, t, d) => endDot(tidy(`${koHead(f, `${doseKo(q)} ${t} ${d ? `${d}일간` : ''}`)} ${v}`)),
+    ko: (v, f, q, t, d) => endDot(tidy(`${koHead(f, `${doseKo(q)} ${t} ${d}`)} ${v}`)),
     en: (v, f, _q, t, d) => tidy(`${v} ${enTail(f, t, d)}.`)
-  } as Fn<[string, string, string, string, number | null]>,
+  } as Fn<[string, string, string, string, string]>,
   customPrn: {
     ko: (v, q) => endDot(tidy(`필요할 때 ${doseKo(q)} ${v}`)),
     en: (v) => `${v} when needed.`
   } as Fn<[string, string]>,
   interval: {
-    ko: (h) => `복용 간격은 최소 ${h}시간 이상 두세요.`,
+    ko: (h, insert) => `${insert ? '사용' : '복용'} 간격은 최소 ${h}시간 이상 두세요.`,
     en: (h) => `Wait at least ${h} hours between doses.`
-  } as Fn<[number]>,
+  } as Fn<[number, boolean]>,
   max: {
     ko: (m) => `하루 ${m}회를 넘기지 마세요.`,
     en: (m) => (m === 1 ? 'Do not use more than once a day.' : `Do not use more than ${m} times a day.`)
@@ -149,7 +167,12 @@ const S = {
   useFor: {
     ko: (d) => `${d}일간 사용하세요.`,
     en: (d) => `Use for ${d} ${d > 1 ? 'days' : 'day'}.`
-  } as Fn<[number]>
+  } as Fn<[number]>,
+  // 직접 입력한 기간: "2~3주간 사용하세요." / "Use for 2 to 3 weeks."
+  durationLine: {
+    ko: (d, oral) => `${d} ${oral ? '복용' : '사용'}하세요.`,
+    en: (d, oral) => `${oral ? 'Take' : 'Use'} ${d}.`
+  } as Fn<[string, boolean]>
 };
 
 export function directions(it: Item, lang: Lang): string[] {
@@ -159,13 +182,14 @@ export function directions(it: Item, lang: Lang): string[] {
   const f = prn ? '' : freqOf(it, lang);
   // 매일이 아니면 "N일간 복용"은 헷갈리므로 아래에서 "N일분"으로 따로 안내
   const notDaily = !prn && !isDaily(it.cycle);
-  const inlineDays = notDaily ? null : it.days;
-  const takeLike = it.route === 'oral' || it.route === 'custom' || it.route === 'none'; // 기간을 문장 안에 넣는 경로
+  const duration = durationOf(it, lang);
+  const inlineDays = notDaily ? '' : duration;
+  const takeLike = it.route !== 'eye' && it.route !== 'topical'; // 기간을 문장 안에 넣는 경로
 
   if (it.route === 'oral') {
     if (prn) {
       out.push(S.oralPrn[lang](q));
-      if (it.interval) out.push(S.interval[lang](it.interval));
+      if (it.interval) out.push(S.interval[lang](it.interval, false));
     } else {
       out.push(S.oral[lang](f, q, timingOf(it, lang), inlineDays));
     }
@@ -177,7 +201,7 @@ export function directions(it: Item, lang: Lang): string[] {
     const v = lang === 'en' ? routePhrase(it, q) : routeVerbKo(it);
     if (prn) {
       out.push(S.customPrn[lang](v, q));
-      if (it.interval) out.push(S.interval[lang](it.interval));
+      if (it.interval) out.push(S.interval[lang](it.interval, isInsertRoute(it.route)));
     } else {
       out.push(S.custom[lang](v, f, q, timingOf(it, lang), inlineDays));
     }
@@ -186,8 +210,9 @@ export function directions(it: Item, lang: Lang): string[] {
   // 직접 입력한 투여 주기 (한국어는 비어 있을 수 있음 — 줄 맞춤을 위해 빈 문장 유지)
   if (!prn && it.cycle === 'custom') out.push(it.texts.cycle[lang]);
   if (prn && it.max) out.push(S.max[lang](it.max));
-  if (it.days && (prn || notDaily || !takeLike)) {
-    out.push(takeLike ? S.supply[lang](it.days) : S.useFor[lang](it.days));
+  if (duration && (prn || notDaily || !takeLike)) {
+    if (it.days) out.push(takeLike ? S.supply[lang](it.days) : S.useFor[lang](it.days));
+    else out.push(S.durationLine[lang](duration, it.route === 'oral'));
   }
   return out;
 }

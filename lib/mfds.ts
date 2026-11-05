@@ -6,7 +6,7 @@
  * ========================================================= */
 import { decodeEntities, docXmlToText, parseDosage } from '@/lib/dosage-parse';
 import { cleanPrint, pillForm } from '@/lib/pill';
-import type { DosageCandidate, Drug, MfdsInfo, PillInfo, Route, UnitKey } from '@/lib/types';
+import { isInsertRoute, type DosageCandidate, type Drug, type MfdsInfo, type PillInfo, type Route, type UnitKey } from '@/lib/types';
 
 const BASE = 'https://apis.data.go.kr/1471000';
 const EASY_URL = `${BASE}/DrbEasyDrugInfoService/getDrbEasyDrugList`;
@@ -67,6 +67,11 @@ async function callApi(url: string, params: Record<string, string>, timeoutMs = 
 /** 품목명·분류로 사용 경로 추정 (모르면 내복) */
 export function guessRoute(name: string, category = ''): Route {
   const s = `${name} ${category}`;
+  // 관장약·좌제·질정: 제품명으로 판별. '질정'·'질연질'은 프로비질정·세프로질정·도네페질정 같은 먹는 약과 겹치므로 분류도 확인
+  const product = name.split(',')[0].replace(/\([^()]*\)/g, '');
+  if (/관장/.test(product)) return 'enema';
+  if (/질좌[제약]/.test(product) || (/질정|질연질/.test(product) && /비뇨생식|피임|곰팡이|기생성|호르몬/.test(category))) return 'vaginal';
+  if (/좌[제약]/.test(product)) return /치질/.test(category) ? 'anal' : 'rectal';
   if (/점안|안약|안연고|안과/.test(s)) return 'eye';
   if (/연고|크림|겔|젤|로션|외용|패취|패치|플라스타|카타플라스마|스프레이|외피|파스|첩부/.test(s)) return 'topical';
   return 'oral';
@@ -80,6 +85,8 @@ export function isInjection(name: string): boolean {
 
 export function guessUnit(name: string, route: Route): UnitKey {
   if (route === 'eye') return 'drop';
+  if (route === 'enema') return 'enema';
+  if (/좌[제약]/.test(name)) return 'supp';
   if (/캡슐|연질/.test(name)) return 'cap';
   // 한글에는 \b가 동작하지 않으므로 제형 단어로만 판별 ('산'은 '히알루론산' 등과 겹쳐 제외)
   if (/시럽|현탁|액|드링크/.test(name)) return 'ml';
@@ -104,7 +111,8 @@ function toDrug(info: MfdsInfo, itemName: string, engName: string, category: str
     ing: { ko: koIngr || itemName, en: engName },
     use: { ko: info.efcy || '', en: '' },
     warn: [],
-    def: { unit: guessUnit(itemName, route), qty: 1, freq: '3', timing: 'after_30' },
+    // 넣는 약은 "1일 3회 식후" 기본값이 맞지 않음 → 식약처 용법을 찾으면 채우고, 없으면 약사가 선택
+    def: { unit: guessUnit(itemName, route), qty: 1, ...(isInsertRoute(route) ? { freq: 'none', timing: 'none' as const } : { freq: '3', timing: 'after_30' as const }) },
     mfds: info
   };
 }

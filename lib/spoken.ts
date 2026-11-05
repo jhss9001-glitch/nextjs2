@@ -1,9 +1,9 @@
 import { pillSentence } from '@/lib/pill';
 import {
-  cautions, enTail, fmtNum, freqOf, infoOf, itemName, itemTitle, koHead, NO_DOSE_EN, pillOf, qtyOf, routePhrase, routeVerbKo, tidy,
+  cautions, durationOf, enTail, fmtNum, freqOf, infoOf, itemName, itemTitle, koHead, NO_DOSE_EN, pillOf, qtyOf, routePhrase, routeVerbKo, tidy,
   timingOf, tx
 } from '@/lib/sentences';
-import type { Item, Lang, ScriptBlock } from '@/lib/types';
+import { isInsertRoute, type Item, type Lang, type ScriptBlock } from '@/lib/types';
 
 /* 구어체 복약지도 스크립트 */
 const KO_NATIVE = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
@@ -19,7 +19,8 @@ function koSpokenQty(it: Item): string {
   if (it.unit === 'none') return '';
   if (it.unit === 'custom') return `${fmtNum(q)}${tx(it.texts.unit, 'ko')}`;
   if (it.unit === 'ml') return `${fmtNum(q)}mL`;
-  const word = { tab: '알', cap: '캡슐', pkt: '포', drop: '방울' }[it.unit];
+  if (it.unit === 'mg') return `${fmtNum(q)}mg`;
+  const word = { tab: '알', cap: '캡슐', pkt: '포', drop: '방울', supp: '개', enema: '개' }[it.unit];
   if (q === 0.5) return `반 ${word}`;
   if (Number.isInteger(q) && q <= 10) return `${KO_NATIVE[q]} ${word}`;
   return `${fmtNum(q)}${word}`;
@@ -85,9 +86,9 @@ const SP = {
     en: () => 'Please apply a thin layer to the affected area whenever you need to.'
   } as Fn<[]>,
   interval: {
-    ko: (h) => `한 번 드시면 다음 복용까지 최소 ${h}시간은 간격을 두세요.`,
-    en: (h) => `Wait at least ${h} hours before taking another dose.`
-  } as Fn<[number]>,
+    ko: (h, insert) => (insert ? `한 번 사용하시면 다음 사용까지 최소 ${h}시간은 간격을 두세요.` : `한 번 드시면 다음 복용까지 최소 ${h}시간은 간격을 두세요.`),
+    en: (h, insert) => `Wait at least ${h} hours before ${insert ? 'using' : 'taking'} another dose.`
+  } as Fn<[number, boolean]>,
   max: {
     ko: (m, oral) => `하루에 ${KO_NATIVE[m] || m} 번까지만 ${oral ? '드세요' : '사용하세요'}.`,
     en: (m, oral) => `Please ${oral ? 'take' : 'use'} it no more than ${m === 1 ? 'once' : `${m} times`} a day.`
@@ -100,10 +101,15 @@ const SP = {
     ko: (d) => `${d}일 동안 사용하세요.`,
     en: (d) => `Please use it for ${d} ${d > 1 ? 'days' : 'day'}.`
   } as Fn<[number]>,
+  // 직접 입력한 기간: "2~3주간 사용하세요." / "Please use it for 2 to 3 weeks."
+  durationLine: {
+    ko: (d, oral) => `${d} ${oral ? '드세요' : '사용하세요'}.`,
+    en: (d, oral) => `Please ${oral ? 'take' : 'use'} it ${d}.`
+  } as Fn<[string, boolean]>,
   sideIntro: {
-    ko: '이 약을 드시면 이런 부작용이 생길 수 있어요.',
-    en: 'This medicine may cause some side effects.'
-  } as Record<Lang, string>,
+    ko: (insert) => `이 약을 ${insert ? '사용하시면' : '드시면'} 이런 부작용이 생길 수 있어요.`,
+    en: () => 'This medicine may cause some side effects.'
+  } as Fn<[boolean]>,
   cautionIntro: {
     ko: '그리고 주의하실 점이 있어요.',
     en: 'Also, please keep these points in mind.'
@@ -119,12 +125,12 @@ function spokenDirections(it: Item, lang: Lang): string[] {
   const prn = it.freq === 'prn';
   const q = lang === 'ko' ? koSpokenQty(it) : qtyOf(it, lang);
   const f = prn ? '' : spokenFreq(it, lang);
-  const takeLike = it.route === 'oral' || it.route === 'custom' || it.route === 'none';
+  const takeLike = it.route !== 'eye' && it.route !== 'topical';
 
   if (it.route === 'oral') {
     if (prn) {
       out.push(SP.oralPrn[lang](q));
-      if (it.interval) out.push(SP.interval[lang](it.interval));
+      if (it.interval) out.push(SP.interval[lang](it.interval, false));
     } else {
       out.push(SP.oral[lang](f, q, timingOf(it, lang)));
     }
@@ -136,7 +142,7 @@ function spokenDirections(it: Item, lang: Lang): string[] {
     const v = lang === 'en' ? routePhrase(it, q) : routeVerbKo(it);
     if (prn) {
       out.push(SP.customPrn[lang](v, q));
-      if (it.interval) out.push(SP.interval[lang](it.interval));
+      if (it.interval) out.push(SP.interval[lang](it.interval, isInsertRoute(it.route)));
     } else {
       out.push(SP.custom[lang](v, f, q, timingOf(it, lang)));
     }
@@ -145,6 +151,7 @@ function spokenDirections(it: Item, lang: Lang): string[] {
   if (!prn && it.cycle === 'custom') out.push(it.texts.cycle[lang]);
   if (prn && it.max) out.push(SP.max[lang](it.max, it.route === 'oral'));
   if (it.days) out.push(takeLike ? SP.supply[lang](it.days) : SP.useFor[lang](it.days));
+  else if (it.texts.days.ko) out.push(SP.durationLine[lang](durationOf(it, lang), it.route === 'oral'));
   return out;
 }
 
@@ -170,7 +177,7 @@ export function buildScript(list: Item[], lang: Lang): ScriptBlock[] {
     if (info.purpose) lines.push(info.purpose[lang]);
     lines.push(...spokenDirections(it, lang));
     if (info.sideEffects.length || info.serious) {
-      lines.push(SP.sideIntro[lang]);
+      lines.push(SP.sideIntro[lang](isInsertRoute(it.route)));
       info.sideEffects.forEach((s) => lines.push(s[lang]));
       if (info.serious) lines.push(info.serious[lang]);
     }
