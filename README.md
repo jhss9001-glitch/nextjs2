@@ -10,9 +10,11 @@
 MFDS_API_KEY=공공데이터포털_일반인증키
 GEMINI_API_KEY=Google_AI_Studio_API_키
 # GEMINI_MODEL=gemini-3.1-flash-lite   (선택, 기본값)
+GOOGLE_TRANSLATE_API_KEY=Google_Cloud_API_키   # 선택, 없으면 역번역도 Gemini 사용
 ```
 
 - `GEMINI_API_KEY`: 약사가 한국어로 직접 입력한 문구(경로·단위·횟수·시점·주기·주의사항·약 이름·약국명)를 영어로 번역합니다. 번역 후 원문을 보지 않은 별도 호출로 역번역해 뜻을 확인할 수 있게 보여줍니다. 브라우저는 `/api/translate`만 호출합니다.
+- `GOOGLE_TRANSLATE_API_KEY`: 역번역에 Cloud Translation API(Basic v2)를 씁니다. 서버에서 호출하므로 키의 애플리케이션 제한은 "없음", API 제한은 Cloud Translation API로 설정합니다. 단위 항목과 호출 실패 시에는 Gemini로 역번역합니다.
 
 사용 API: e약은요(`DrbEasyDrugInfoService/getDrbEasyDrugList`), 의약품 제품 허가정보(`DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08`). 브라우저는 `/api/drugs/search?q=`만 호출하고, 키는 서버에만 있습니다.
 

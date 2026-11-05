@@ -2,7 +2,7 @@
  * 한국어 → 영어 번역 (Gemini API, 서버 전용 — 클라이언트에서 import 금지)
  *  - 약사가 한국어로 직접 입력한 문구를 환자용 영어 안내문에 맞게 번역
  *  - 항목(kind)마다 영어 문장 안에 들어갈 자리에 맞는 형태로 요청
- *  - 역번역(back)을 함께 받아 약사가 한국어로 뜻을 확인할 수 있게 함
+ *  - 역번역(back)을 함께 받아 약사가 한국어로 뜻을 확인할 수 있게 함 (Cloud Translation, 실패·단위는 Gemini)
  * ========================================================= */
 
 export type TranslateKind = 'route' | 'unit' | 'freq' | 'timing' | 'cycle' | 'note' | 'name' | 'pharmacy';
@@ -15,8 +15,11 @@ export interface TranslateResult {
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 // 짧은 문구 번역이라 가벼운 모델로 충분. 응답 속도는 시간대에 따라 크게 달라짐. GEMINI_MODEL로 변경 가능
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
-// 모델마다 혼잡한 시간대가 달라서 재시도는 다른 모델로 보냄
+// 모델마다 혼잡한 시간대가 달라서 두 번째 요청은 다른 모델로 보냄
 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+// 역번역은 영어 원문을 그대로 옮기면 되어서 더 빠른 Cloud Translation 사용 (GOOGLE_TRANSLATE_API_KEY 없으면 Gemini)
+const CLOUD_API = 'https://translation.googleapis.com/language/translate/v2';
+const CLOUD_TIMEOUT = 5000;
 
 const SYSTEM = `You are a translator for a Korean community pharmacy.
 A Korean pharmacist types short instructions in Korean; you turn them into plain, patient-friendly English
@@ -88,19 +91,25 @@ function normalize(kind: TranslateKind, en: string): string {
 
 export class QuotaError extends Error {}
 
-// 평소 응답은 1~2초, 긴 환자 설명 요약은 9초 정도. 첫 시도가 늦으면 끊고 한 번 더 시도 (patient-info가 60초 제한 안에서 여러 번 호출하므로 합계를 짧게 유지)
+// 평소 응답은 1~2초인데 가끔 8~16초씩 늦어짐. 첫 모델이 이 시간 안에 답하지 않으면 다른 모델에도 같이 보내 먼저 온 답을 씀
+const HEDGE_DELAY = 3000;
+// 긴 환자 설명 요약은 9초 정도 (patient-info가 60초 제한 안에서 여러 번 호출하므로 합계를 짧게 유지)
 const ATTEMPT_TIMEOUTS = [12000, 15000];
 
-/** Gemini 요청. 서버 오류(5xx)·시간 초과·연결 실패만 재시도 (429·400 등은 그대로 돌려줌) */
-async function postWithRetry(key: string, payload: string): Promise<{ res: Response; body: string }> {
+type GeminiReply = { res: Response; body: string };
+
+/** Gemini 요청. 늦으면 두 번째 모델을 함께 호출. 서버 오류(5xx)·시간 초과·연결 실패면 바로 호출 (첫 모델의 429·400 등은 그대로 돌려줌) */
+async function postHedged(key: string, payload: string): Promise<GeminiReply> {
   const models = [process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL, FALLBACK_MODEL];
-  for (let i = 0; ; i++) {
+  const stop = new AbortController();
+
+  const attempt = async (i: number): Promise<GeminiReply | null> => {
     let failure: string;
     try {
       const res = await fetch(`${API}/${encodeURIComponent(models[i])}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        signal: AbortSignal.timeout(ATTEMPT_TIMEOUTS[i]),
+        signal: AbortSignal.any([stop.signal, AbortSignal.timeout(ATTEMPT_TIMEOUTS[i])]),
         body: payload
       });
       const body = await res.text();
@@ -109,14 +118,38 @@ async function postWithRetry(key: string, payload: string): Promise<{ res: Respo
     } catch (e) {
       failure = (e as Error).name;
     }
-    console.warn(`Gemini 요청 실패 (${models[i]}): ${failure}`);
-    if (i === models.length - 1) throw new Error('번역 서버가 혼잡합니다. 잠시 뒤 다시 시도해 주세요.');
+    if (!stop.signal.aborted) console.warn(`Gemini 요청 실패 (${models[i]}): ${failure}`);
+    return null;
+  };
+
+  const first = attempt(0);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), HEDGE_DELAY); });
+  const early = await Promise.race([first, slow]);
+  clearTimeout(timer);
+  if (early) return early;
+
+  const tries = [first, attempt(1)];
+  try {
+    // 성공한 답이 오면 바로 쓰고, 남은 요청은 끊음
+    return await Promise.any(tries.map(async (t) => {
+      const reply = await t;
+      if (!reply?.res.ok) throw new Error('not ok');
+      return reply;
+    }));
+  } catch {
+    const [a, b] = await Promise.all(tries);
+    const reply = a ?? b;
+    if (reply) return reply;
+    throw new Error('번역 서버가 혼잡합니다. 잠시 뒤 다시 시도해 주세요.');
+  } finally {
+    stop.abort();
   }
 }
 
 /** Gemini 호출 → JSON 결과 */
 export async function generate<T>(system: string, prompt: string, schema: object): Promise<T> {
-  const { res, body } = await postWithRetry(
+  const { res, body } = await postHedged(
     apiKey(),
     JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
@@ -145,6 +178,33 @@ export async function generate<T>(system: string, prompt: string, schema: object
 const backSource = (kind: TranslateKind, en: string) =>
   kind === 'unit' ? en.split('|').map((w, i) => `${i + 1} ${w}`).join(', ') : kind === 'route' ? en.replace('{dose}', '(the dose)') : en;
 
+/** Cloud Translation으로 영어 → 한국어. 키가 없거나 실패하면 null (호출한 쪽에서 Gemini로 넘어감) */
+async function cloudBack(texts: string[]): Promise<string[] | null> {
+  const key = process.env.GOOGLE_TRANSLATE_API_KEY?.trim();
+  if (!key) return null;
+  let failure: string;
+  try {
+    const res = await fetch(CLOUD_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT),
+      body: JSON.stringify({ q: texts, source: 'en', target: 'ko', format: 'text' })
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { translations?: { translatedText?: string }[] } };
+      const out = (json.data?.translations ?? []).map((t) => (t.translatedText ?? '').trim());
+      if (out.length === texts.length && out.every(Boolean)) return out;
+      failure = 'empty result';
+    } else {
+      failure = String(res.status);
+    }
+  } catch (e) {
+    failure = (e as Error).name;
+  }
+  console.warn(`Cloud Translation 요청 실패: ${failure}`);
+  return null;
+}
+
 const backCache = new Map<string, string>();
 
 /** 영어 → 한국어 역번역만 (화면은 영어를 먼저 보여 주고 이 결과는 뒤따라 붙임) */
@@ -152,8 +212,12 @@ export async function backTranslate(kind: TranslateKind, en: string): Promise<st
   const key = `${kind}\u0000${en}`;
   const hit = backCache.get(key);
   if (hit != null) return hit;
-  const b = await generate<{ ko?: string }>(BACK_SYSTEM, `English:\n${backSource(kind, en)}`, BACK_SCHEMA);
-  const back = (b.ko ?? '').trim();
+  const source = backSource(kind, en);
+  // 단위는 Cloud Translation이 문맥 없이 오역함 ("1 puff" → "한 모금") → Gemini 유지
+  const cloud = kind === 'unit' ? null : await cloudBack([source]);
+  const back = cloud
+    ? cloud[0]
+    : ((await generate<{ ko?: string }>(BACK_SYSTEM, `English:\n${source}`, BACK_SCHEMA)).ko ?? '').trim();
   if (back) backCache.set(key, back);
   if (backCache.size > 2000) backCache.delete(backCache.keys().next().value!);
   return back;
@@ -212,15 +276,17 @@ export async function translateBatch(sentences: string[]): Promise<TranslateResu
   const en = out.items ?? [];
   if (en.length !== src.length || en.some((e) => !e?.trim())) throw new Error('일부 문장을 번역하지 못했습니다.');
 
-  let back: string[] = [];
-  try {
-    const b = await generate<{ items?: string[] }>(
-      BACK_SYSTEM,
-      `Translate each numbered English sentence into Korean. Return "items" with exactly ${en.length} Korean strings in the same order.\n\nEnglish:\n${en.map((e, i) => `${i + 1}. ${e}`).join('\n')}`,
-      LIST_SCHEMA
-    );
-    back = b.items?.length === en.length ? b.items : [];
-  } catch { /* 역번역 실패는 무시 (화면에서 "확인용 번역 없음" 표시) */ }
+  let back: string[] = (await cloudBack(en)) ?? [];
+  if (!back.length) {
+    try {
+      const b = await generate<{ items?: string[] }>(
+        BACK_SYSTEM,
+        `Translate each numbered English sentence into Korean. Return "items" with exactly ${en.length} Korean strings in the same order.\n\nEnglish:\n${en.map((e, i) => `${i + 1}. ${e}`).join('\n')}`,
+        LIST_SCHEMA
+      );
+      back = b.items?.length === en.length ? b.items : [];
+    } catch { /* 역번역 실패는 무시 (화면에서 "확인용 번역 없음" 표시) */ }
+  }
 
   return en.map((e, i) => ({ en: normalize('note', e), back: (back[i] ?? '').trim() }));
 }

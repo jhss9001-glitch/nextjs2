@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { buildPatientInfo } from '@/lib/patient-info';
 import { QuotaError } from '@/lib/translate';
 
-// 식약처 상세(느릴 수 있음) + Gemini 요약·번역 3회
+// 식약처 상세(느릴 수 있음) + Gemini 요약·번역 2회 + 역번역 1회 (Cloud Translation 실패 시 Gemini)
 export const maxDuration = 60;
 
 /**
