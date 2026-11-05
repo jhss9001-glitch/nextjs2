@@ -22,6 +22,8 @@ that will be printed on a medication guide for a foreign patient.
 Rules:
 - Keep the medical meaning exactly. Do not add, remove, or soften any information. Keep all numbers and units.
   Do not add qualifiers that are not in the Korean (such as "at least", "about", "if needed").
+- Keep lists and qualifiers structured as in the Korean. Keep connecting words such as "or", and do not regroup items under a different category
+  (for example, a fever is not a kind of pain).
 - If the input is unreadable, garbled, or you are not sure what it means, return an empty string for "en". Never guess or invent an instruction.
 - Use simple everyday English (about 6th-grade reading level). No Korean characters in the English.
 - Return only the JSON described by the schema.`;
@@ -48,7 +50,10 @@ const KIND_PROMPT: Record<TranslateKind, string> = {
     'When to use the medicine. It completes "Take 1 tablet once a day, ___." — return only that phrase without a period, ' +
     'e.g. "after brushing your teeth", "1 hour before breakfast".',
   cycle: 'A schedule instruction. Return one or two complete English sentences ending with a period.',
-  note: 'A caution or advice for the patient. Return one or two complete English sentences ending with a period.',
+  note:
+    'A caution or advice for the patient. Return one or two complete English sentences ending with a period. ' +
+    'Short noun-form instructions such as "냉장 보관", "음주 금지", "운전 주의" are complete. ' +
+    'If the Korean stops before saying what to do (for example "면봉에 적셔서", "식후에", "물과 함께"), return an empty string. Never guess the missing action.',
   name:
     'A Korean medicine PRODUCT name (brand name + dosage form + strength). Return the English PRODUCT name: ' +
     'romanize/transliterate the brand part as the product is known, translate the dosage form, keep the strength. ' +
@@ -81,20 +86,45 @@ function normalize(kind: TranslateKind, en: string): string {
 
 export class QuotaError extends Error {}
 
-/** Gemini 한 번 호출 → JSON 결과 */
+// 평소 응답은 1~2초, 긴 환자 설명 요약은 9초 정도. 첫 시도가 늦으면 끊고 한 번 더 시도 (patient-info가 60초 제한 안에서 여러 번 호출하므로 합계를 짧게 유지)
+const ATTEMPT_TIMEOUTS = [12000, 15000];
+const RETRY_DELAY = 800;
+
+/** Gemini 요청. 서버 오류(5xx)·시간 초과·연결 실패만 재시도 (429·400 등은 다시 보내도 같으므로 그대로 돌려줌) */
+async function postWithRetry(url: string, key: string, payload: string): Promise<{ res: Response; body: string }> {
+  for (let i = 0; ; i++) {
+    let failure: string;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        signal: AbortSignal.timeout(ATTEMPT_TIMEOUTS[i]),
+        body: payload
+      });
+      const body = await res.text();
+      if (res.status < 500) return { res, body };
+      failure = String(res.status);
+    } catch (e) {
+      failure = (e as Error).name;
+    }
+    console.warn(`Gemini 요청 실패 (${i + 1}/${ATTEMPT_TIMEOUTS.length}): ${failure}`);
+    if (i === ATTEMPT_TIMEOUTS.length - 1) throw new Error('번역 서버가 혼잡합니다. 잠시 뒤 다시 시도해 주세요.');
+    await new Promise((r) => setTimeout(r, RETRY_DELAY));
+  }
+}
+
+/** Gemini 호출 → JSON 결과 */
 export async function generate<T>(system: string, prompt: string, schema: object): Promise<T> {
   const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  const res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
-    signal: AbortSignal.timeout(20000),
-    body: JSON.stringify({
+  const { res, body } = await postWithRetry(
+    `${API}/${encodeURIComponent(model)}:generateContent`,
+    apiKey(),
+    JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: schema }
     })
-  });
-  const body = await res.text();
+  );
   if (res.status === 429) {
     throw new QuotaError('Gemini 사용량 한도를 넘었습니다(무료 등급은 분당 요청 수가 적음). 잠시 뒤 다시 시도하거나 AI Studio에서 결제 설정을 확인하세요.');
   }
