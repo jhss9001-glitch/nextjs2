@@ -48,7 +48,9 @@ const SUMMARY_SCHEMA = {
 const cache = new Map<string, InfoResult>();
 
 export async function buildPatientInfo(itemSeq: string, extra: { efcy?: string; se?: string } = {}): Promise<InfoResult> {
-  const hit = cache.get(itemSeq);
+  // 보충 문장에 따라 결과가 달라지므로 함께 키로 사용
+  const key = [itemSeq, extra.efcy ?? '', extra.se ?? ''].join('\u0000');
+  const hit = cache.get(key);
   if (hit) return hit;
 
   const det = await getDetail(itemSeq);
@@ -78,7 +80,7 @@ export async function buildPatientInfo(itemSeq: string, extra: { efcy?: string; 
     serious: line(serious),
     source: [det.ee && '허가사항 효능효과', det.se && '허가사항 이상반응', extra.efcy && 'e약은요'].filter(Boolean).join(' · ')
   };
-  cache.set(itemSeq, result);
+  cache.set(key, result);
   if (cache.size > 500) cache.delete(cache.keys().next().value!);
   return result;
 }
