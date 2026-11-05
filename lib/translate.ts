@@ -15,6 +15,8 @@ export interface TranslateResult {
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 // 짧은 문구 번역이라 가벼운 모델로 충분. 응답 속도는 시간대에 따라 크게 달라짐. GEMINI_MODEL로 변경 가능
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
+// 모델마다 혼잡한 시간대가 달라서 재시도는 다른 모델로 보냄
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 
 const SYSTEM = `You are a translator for a Korean community pharmacy.
 A Korean pharmacist types short instructions in Korean; you turn them into plain, patient-friendly English
@@ -52,7 +54,7 @@ const KIND_PROMPT: Record<TranslateKind, string> = {
   cycle: 'A schedule instruction. Return one or two complete English sentences ending with a period.',
   note:
     'A caution or advice for the patient. Return one or two complete English sentences ending with a period. ' +
-    'Short noun-form instructions such as "냉장 보관", "음주 금지", "운전 주의" are complete. ' +
+    'Short noun-form instructions such as "냉장 보관", "음주 금지", "운전 주의", "식후 복용" are complete. ' +
     'If the Korean stops before saying what to do (for example "면봉에 적셔서", "식후에", "물과 함께"), return an empty string. Never guess the missing action.',
   name:
     'A Korean medicine PRODUCT name (brand name + dosage form + strength). Return the English PRODUCT name: ' +
@@ -88,14 +90,14 @@ export class QuotaError extends Error {}
 
 // 평소 응답은 1~2초, 긴 환자 설명 요약은 9초 정도. 첫 시도가 늦으면 끊고 한 번 더 시도 (patient-info가 60초 제한 안에서 여러 번 호출하므로 합계를 짧게 유지)
 const ATTEMPT_TIMEOUTS = [12000, 15000];
-const RETRY_DELAY = 800;
 
-/** Gemini 요청. 서버 오류(5xx)·시간 초과·연결 실패만 재시도 (429·400 등은 다시 보내도 같으므로 그대로 돌려줌) */
-async function postWithRetry(url: string, key: string, payload: string): Promise<{ res: Response; body: string }> {
+/** Gemini 요청. 서버 오류(5xx)·시간 초과·연결 실패만 재시도 (429·400 등은 그대로 돌려줌) */
+async function postWithRetry(key: string, payload: string): Promise<{ res: Response; body: string }> {
+  const models = [process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL, FALLBACK_MODEL];
   for (let i = 0; ; i++) {
     let failure: string;
     try {
-      const res = await fetch(url, {
+      const res = await fetch(`${API}/${encodeURIComponent(models[i])}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         signal: AbortSignal.timeout(ATTEMPT_TIMEOUTS[i]),
@@ -107,17 +109,14 @@ async function postWithRetry(url: string, key: string, payload: string): Promise
     } catch (e) {
       failure = (e as Error).name;
     }
-    console.warn(`Gemini 요청 실패 (${i + 1}/${ATTEMPT_TIMEOUTS.length}): ${failure}`);
-    if (i === ATTEMPT_TIMEOUTS.length - 1) throw new Error('번역 서버가 혼잡합니다. 잠시 뒤 다시 시도해 주세요.');
-    await new Promise((r) => setTimeout(r, RETRY_DELAY));
+    console.warn(`Gemini 요청 실패 (${models[i]}): ${failure}`);
+    if (i === models.length - 1) throw new Error('번역 서버가 혼잡합니다. 잠시 뒤 다시 시도해 주세요.');
   }
 }
 
 /** Gemini 호출 → JSON 결과 */
 export async function generate<T>(system: string, prompt: string, schema: object): Promise<T> {
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const { res, body } = await postWithRetry(
-    `${API}/${encodeURIComponent(model)}:generateContent`,
     apiKey(),
     JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
@@ -155,7 +154,7 @@ export async function backTranslate(kind: TranslateKind, en: string): Promise<st
   if (hit != null) return hit;
   const b = await generate<{ ko?: string }>(BACK_SYSTEM, `English:\n${backSource(kind, en)}`, BACK_SCHEMA);
   const back = (b.ko ?? '').trim();
-  backCache.set(key, back);
+  if (back) backCache.set(key, back);
   if (backCache.size > 2000) backCache.delete(backCache.keys().next().value!);
   return back;
 }
@@ -189,7 +188,8 @@ export async function translateKo(kind: TranslateKind, ko: string, withBack = tr
   } catch { /* 역번역 실패는 무시 */ }
 
   const result = { en, back };
-  cache.set(key, result);
+  // 역번역을 못 받은 결과는 저장하지 않음 → 다음 호출에서 다시 받아 약사가 확인할 수 있게
+  if (back) cache.set(key, result);
   if (cache.size > 2000) cache.delete(cache.keys().next().value!);
   return result;
 }

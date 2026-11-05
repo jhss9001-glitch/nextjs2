@@ -28,8 +28,9 @@ Rules:
 - purpose: ONE sentence about what the medicine is used for, in everyday words (e.g. "유방암 치료에 쓰는 약이에요.").
 - sideEffects: the 3 to 5 MOST COMMON side effects a patient may notice, one short sentence each, everyday words
   (e.g. "메스꺼움이나 구토가 있을 수 있어요."). Prefer items described as common/frequent. Skip lab-test-only findings.
-- serious: ONE sentence telling when to stop and contact a doctor right away, based on the serious reactions in the text
-  (e.g. "숨이 차거나 열이 나면 바로 병원에 연락하세요."). Empty if the text has none.
+- serious: ONE sentence telling when to contact a doctor right away, based on the serious reactions in the text. Empty if the text has none.
+  If the text says to stop the medicine, the sentence MUST say so (e.g. "숨이 차거나 열이 나면 약을 멈추고 바로 병원에 연락하세요.").
+  If the text does not say to stop, do not add it (e.g. "숨이 차거나 열이 나면 바로 병원에 연락하세요.").
 - Describe what the PATIENT WOULD FEEL OR SEE, not disease names
   (e.g. "숨이 많이 차요" instead of "급성 호흡곤란 증후군", "피부나 눈이 노래져요" instead of "간독성").
 - No drug names, no percentages, no medical jargon if a plain word exists.
@@ -80,7 +81,8 @@ export async function buildPatientInfo(itemSeq: string, extra: { efcy?: string; 
     serious: line(serious),
     source: [det.ee && '허가사항 효능효과', det.se && '허가사항 이상반응', extra.efcy && 'e약은요'].filter(Boolean).join(' · ')
   };
-  cache.set(key, result);
+  // 역번역을 못 받은 문장이 있으면 저장하지 않음 → 다음 호출에서 다시 받아 약사가 확인할 수 있게
+  if ([result.purpose, ...result.sideEffects, result.serious].every((l) => !l || l.back)) cache.set(key, result);
   if (cache.size > 500) cache.delete(cache.keys().next().value!);
   return result;
 }
